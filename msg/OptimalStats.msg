@@ -1,0 +1,2 @@
+uint64 total_loop_num
+uint64 mpc_fail_num

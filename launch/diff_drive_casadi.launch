@@ -1,0 +1,91 @@
+<!-- 
+  Simulate a differential drive robot with the mpc_local_planner in stage:
+  - stage
+  - map_server
+  - move_base
+  - static map
+  - amcl
+  - rviz view
+ -->
+<launch>
+ 
+        <arg name="rviz" default="true" />
+        <arg name="plot" default="false" />
+        <arg name="plot_states" default="false" />
+
+        <!--  ************** Global Parameters ***************  -->
+        <param name="/use_sim_time" value="true"/>
+
+        <!--  ************** Stage Simulator ***************  -->
+	<node pkg="stage_ros" type="stageros" name="stageros" args="$(find potential_gap_mpc)/stage/maze_diff_drive.world">
+		<remap from="base_scan" to="scan"/>
+  	</node>
+
+	<node name="egocircle_node" pkg="egocircle" type="ego_circle">
+		<!-- <param name="base_frame_id" value="robot0"/> -->
+		<!-- <param name="odom_frame_id" value="map_static"/> -->
+		<!-- <remap from="/scan" to="/robot0/laser_0"/> -->
+    </node>
+        <!--  ************** Navigation ***************  -->
+	<node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+  	  	<rosparam file="$(find mpc_local_planner_examples)/cfg/diff_drive/costmap_common_params.yaml" command="load" ns="global_costmap" />
+  	 	<rosparam file="$(find mpc_local_planner_examples)/cfg/diff_drive/costmap_common_params.yaml" command="load" ns="local_costmap" />
+  		<rosparam file="$(find mpc_local_planner_examples)/cfg/diff_drive/local_costmap_params.yaml" command="load" />
+  		<rosparam file="$(find mpc_local_planner_examples)/cfg/diff_drive/global_costmap_params.yaml" command="load" />
+  		<rosparam file="$(find potential_gap_mpc)/cfg/diff_drive/pg_mpc_local_planner_params_casadi.yaml" command="load" />
+
+		<param name="base_global_planner" value="global_planner/GlobalPlanner" />
+		<param name="planner_frequency" value="1.0" />
+		<param name="planner_patience" value="5.0" />
+
+		<param name="base_local_planner" value="pg_mpc_local_planner/PGMpcHcLocalPlannerROS" />
+		<param name="controller_frequency" value="5.0" />
+		<param name="controller_patience" value="15.0" />
+
+		<param name="PGMpcHcLocalPlannerROS/shape_id" value="0"/>
+		<param name="PGMpcHcLocalPlannerROS/length" value="0.4"/>
+
+		<param name="PGMpcHcLocalPlannerROS/controller/publish_ocp_results" value="true" if="$(arg plot)" />
+
+		<param name="PGMpcHcLocalPlannerROS/pf_local_frame_enable" value="false"/>
+
+		<param name="PGMpcHcLocalPlannerROS/map_frame_id" value="map"/>
+		<param name="PGMpcHcLocalPlannerROS/odom_frame_id" value="odom"/>
+		<param name="PGMpcHcLocalPlannerROS/robot_frame_id" value="base_footprint"/>
+		<param name="PGMpcHcLocalPlannerROS/sensor_frame_id" value="base_laser_link"/>
+
+		<!-- <param name="PotentialGapPlanner/v_lin_x_const" value="0.0"/>
+		<param name="PotentialGapPlanner/v_lin_y_const" value="0.0"/>
+		<param name="PotentialGapPlanner/k_drive_x" value="3.5"/> -->
+		<!--<param name="PotentialGapPlanner/k_turn" value="0.1"/>
+		<param name="PotentialGapPlanner/k_drive_y" value="0.1"/>-->
+
+		<rosparam file="$(find potential_gap_mpc)/cfg/diff_drive/potentialgap_local_planner_params.yaml" command="load" ns="PGMpcHcLocalPlannerROS"/>
+	</node>
+
+
+	<!--  ****** Maps *****  -->
+	<node name="map_server" pkg="map_server" type="map_server" args="$(find potential_gap_mpc)/maps/maze.yaml" output="screen">
+                <param name="frame_id" value="map"/>
+	</node>
+
+	<node pkg="amcl" type="amcl" name="amcl" output="screen">
+		<rosparam file="$(find mpc_local_planner_examples)/cfg/amcl_params.yaml" command="load" />
+
+	    <param name="initial_pose_x"            value="2"/>
+		<param name="initial_pose_y"            value="2"/>
+		<param name="initial_pose_a"            value="1.57"/>
+	</node>
+
+	<!--  **************** Visualization ****************  -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find potential_gap_mpc)/rviz/rviz_navigation.rviz" if="$(arg rviz)"/>
+
+
+        <!-- **************** Plot ocp results ************** -->
+        <!-- <node name="ocp_result_plotter" pkg="mpc_local_planner" type="plot_optimal_control_results.py" output="screen" if="$(arg plot)">
+              <param name="ocp_result_topic" value="/move_base/MpcLocalPlannerROS/ocp_result"/>
+              <param name="plot_rate" value="5"/>
+              <param name="plot_states" value="$(arg plot_states)"/>
+        </node> -->
+
+</launch>

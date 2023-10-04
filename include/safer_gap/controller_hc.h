@@ -20,8 +20,8 @@
  *  Authors: Shiyu Feng
  *********************************************************************/
 
-#ifndef PG_MPC_HARD_CSTR_CONTROLLER_H_
-#define PG_MPC_HARD_CSTR_CONTROLLER_H_
+#ifndef SG_MPC_HARD_CSTR_CONTROLLER_H_
+#define SG_MPC_HARD_CSTR_CONTROLLER_H_
 
 #include <corbo-controllers/predictive_controller.h>
 
@@ -45,21 +45,21 @@
 // #include <Eigen/Geometry>
 
 #include <casadi/casadi.hpp>
-#include <potential_gap_mpc/keyhole.hpp>
+#include <safer_gap/keyhole.hpp>
 #include <potential_gap/gap.h>
-#include <potential_gap_mpc/print_utils.h>
+#include <safer_gap/print_utils.h>
 #include <potential_gap/robot_geo_parser.h>
 
 #include <pips_trajectory_msgs/trajectory_point.h>
 #include <pips_trajectory_msgs/trajectory_points.h>
 
-namespace pg_mpc_local_planner {
+namespace sg_mpc_local_planner {
 
 using namespace mpc_local_planner;
 using namespace casadi;
 
 /**
- * @brief Potential Gap MPC controller for mobile robots
+ * @brief Safer Gap MPC controller for mobile robots
  *
  * @ingroup controllers
  *
@@ -110,13 +110,13 @@ struct nmpcParams
 
 
 
-class PGHCController : public corbo::PredictiveController
+class SGHCController : public corbo::PredictiveController
 {
 public:
-   using Ptr     = std::shared_ptr<PGHCController>;
+   using Ptr     = std::shared_ptr<SGHCController>;
    using PoseSE2 = teb_local_planner::PoseSE2;
 
-   PGHCController() = default;
+   SGHCController() = default;
 
    bool configure(ros::NodeHandle& nh);
    bool configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled=false);
@@ -140,8 +140,8 @@ public:
 //            corbo::TimeSeries::Ptr x_seq);
 
    // implements interface method
-   corbo::ControllerInterface::Ptr getInstance() const override { return std::make_shared<PGHCController>(); }
-   static corbo::ControllerInterface::Ptr getInstanceStatic() { return std::make_shared<PGHCController>(); }
+   corbo::ControllerInterface::Ptr getInstance() const override { return std::make_shared<SGHCController>(); }
+   static corbo::ControllerInterface::Ptr getInstanceStatic() { return std::make_shared<SGHCController>(); }
 
 //  void setOptimalControlProblem(corbo::OptimalControlProblemInterface::Ptr ocp) = delete;
 
@@ -275,6 +275,6 @@ protected:
    uint64_t mpc_fail_num_ = 0;
 };
 
-}  // namespace pg_mpc_local_planner
+}  // namespace sg_mpc_local_planner
 
-#endif  // PG_MPC_HARD_CSTR_CONTROLLER_H_
+#endif  // SG_MPC_HARD_CSTR_CONTROLLER_H_

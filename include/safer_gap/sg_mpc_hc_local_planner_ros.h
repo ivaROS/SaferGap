@@ -20,8 +20,8 @@
  *  Authors: Christoph Rösmann
  *********************************************************************/
 
-#ifndef PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
-#define PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#ifndef SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#define SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
 
 #include <ros/ros.h>
 
@@ -33,9 +33,9 @@
 #include <nav_core/base_local_planner.h>
 
 // mpc_local_planner related classes
-#include <potential_gap_mpc/controller_hc.h>
+#include <safer_gap/controller_hc.h>
 #include <mpc_local_planner/utils/publisher.h>
-#include <potential_gap_mpc/print_utils.h>
+#include <safer_gap/print_utils.h>
 
 // teb_local_planner related classes
 #include <teb_local_planner/obstacles.h>
@@ -90,9 +90,9 @@
 #include <tf2_pips/tf2_trajectory.h>
 
 #include <cubic_spline_smoother/cubic_spline_interpolator.h>
-#include <potential_gap_mpc/OptimalStats.h>
+#include <safer_gap/OptimalStats.h>
 
-namespace pg_mpc_local_planner {
+namespace sg_mpc_local_planner {
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
@@ -104,12 +104,12 @@ typedef TurtlebotGenAndTest::TrajBridge TrajBridge;
 typedef std::shared_ptr<TurtlebotGenAndTest> GenAndTest_ptr;
 
 /**
- * @class PGMpcHcLocalPlannerROS
+ * @class SGMpcHcLocalPlannerROS
  * @brief Implements both nav_core::BaseLocalPlanner and mbf_costmap_core::CostmapController abstract
  * interfaces, so the teb_local_planner plugin can be used both in move_base and move_base_flex (MBF).
  * @todo Escape behavior, more efficient obstacle handling
  */
-class PGMpcHcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap_core::CostmapController
+class SGMpcHcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap_core::CostmapController
 {
    using PoseSE2                = teb_local_planner::PoseSE2;
    using RobotFootprintModelPtr = teb_local_planner::RobotFootprintModelPtr;
@@ -127,11 +127,11 @@ public:
    /**
     * @brief Default constructor of the plugin
     */
-   PGMpcHcLocalPlannerROS();
+   SGMpcHcLocalPlannerROS();
    /**
     * @brief  Destructor of the plugin
     */
-   ~PGMpcHcLocalPlannerROS();
+   ~SGMpcHcLocalPlannerROS();
 
    /**
     * @brief Initializes the teb plugin
@@ -455,7 +455,7 @@ private:
    dynamic_reconfigure::Server<potential_gap::pgConfig>::CallbackType f_;
 
    // internal objects
-   PGHCController _controller;
+   SGHCController _controller;
    ObstContainer _obstacles;  //!< Obstacle vector that should be considered during local trajectory optimization
    Publisher _publisher;
    std::shared_ptr<base_local_planner::CostmapModel> _costmap_model;
@@ -535,6 +535,6 @@ public:
    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-};  // end namespace mpc_local_planner
+};  // end namespace sg_mpc_local_planner
 
-#endif  // PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#endif  // SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_

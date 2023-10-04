@@ -18,7 +18,7 @@
 using namespace std;
 using namespace operations_research;
 
-namespace pg_mpc_local_planner{
+namespace sg_mpc_local_planner{
 namespace keyhole{
 
 struct KeyholeParam{

@@ -20,7 +20,7 @@
  *  Authors: Christoph Rösmann
  *********************************************************************/
 
-#include <potential_gap_mpc/controller_hc.h>
+#include <safer_gap/controller_hc.h>
 
 #include <corbo-optimal-control/functions/hybrid_cost.h>
 #include <corbo-optimal-control/functions/minimum_time.h>
@@ -56,9 +56,9 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
-namespace pg_mpc_local_planner {
+namespace sg_mpc_local_planner {
 
-bool PGHCController::configure(ros::NodeHandle& nh)
+bool SGHCController::configure(ros::NodeHandle& nh)
 {
     mpc_fail_num_ = 0;
 
@@ -101,19 +101,19 @@ bool PGHCController::configure(ros::NodeHandle& nh)
 
     // custom feedback:
     nh.param("controller/prefer_x_feedback", _prefer_x_feedback, _prefer_x_feedback);
-    _x_feedback_sub = nh.subscribe("state_feedback", 1, &PGHCController::stateFeedbackCallback, this);
+    _x_feedback_sub = nh.subscribe("state_feedback", 1, &SGHCController::stateFeedbackCallback, this);
     
     return true;
 }
 
-bool PGHCController::configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled)
+bool SGHCController::configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled)
 {
     time_int_ = 1.0 / controller_frequency;
     ni_enabled_ = ni_enabled;
     return configure(nh);
 }
 
-// bool PGHCController::step(const PGHCController::PoseSE2& start, const PGHCController::PoseSE2& goal, const geometry_msgs::Twist& vel, double dt, ros::Time t,
+// bool SGHCController::step(const SGHCController::PoseSE2& start, const SGHCController::PoseSE2& goal, const geometry_msgs::Twist& vel, double dt, ros::Time t,
 //                       corbo::TimeSeries::Ptr u_seq, corbo::TimeSeries::Ptr x_seq)
 // {
 //     std::vector<geometry_msgs::PoseStamped> initial_plan(2);
@@ -122,7 +122,7 @@ bool PGHCController::configure(ros::NodeHandle& nh, double controller_frequency,
 //     return step(initial_plan, vel, dt, t, u_seq, x_seq);
 // }
 
-bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, potential_gap::RobotGeoProc& robot_geo, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
+bool SGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, potential_gap::RobotGeoProc& robot_geo, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
                       DM& u_opt, DM& x_seq)
 {
     if (initial_plan.points.size() < 2)
@@ -428,7 +428,7 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
     return _ocp_successful;
 }
 
-DM PGHCController::projectionOperator(const std::pair<double, double>& ego_min, DM& u)
+DM SGHCController::projectionOperator(const std::pair<double, double>& ego_min, DM& u)
 {
     double u_add_x = 0;
     double u_add_y = 0;
@@ -512,7 +512,7 @@ DM PGHCController::projectionOperator(const std::pair<double, double>& ego_min, 
     return DM(std::vector<double>{vx, w});
 }
 
-Eigen::Vector3d PGHCController::projection_method(double min_diff_x, double min_diff_y)
+Eigen::Vector3d SGHCController::projection_method(double min_diff_x, double min_diff_y)
 {
     double r_min = r_min_;
     double r_norm = r_norm_;
@@ -530,7 +530,7 @@ Eigen::Vector3d PGHCController::projection_method(double min_diff_x, double min_
     return Eigen::Vector3d(norm_si_der_x, norm_si_der_y, si);
 }
 
-bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
+bool SGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
                                bool has_feedforward, Eigen::Vector2f& u_opt)
 {
     if (initial_plan.points.size() < 2)
@@ -646,7 +646,7 @@ bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std
     return _ocp_successful;
 }
 
-pips_trajectory_msgs::trajectory_point PGHCController::interpPose(const pips_trajectory_msgs::trajectory_points& traj, double t)
+pips_trajectory_msgs::trajectory_point SGHCController::interpPose(const pips_trajectory_msgs::trajectory_points& traj, double t)
 {
     pips_trajectory_msgs::trajectory_point interp_pose;
     ros::Duration last_time = traj.points.back().time;
@@ -703,7 +703,7 @@ pips_trajectory_msgs::trajectory_point PGHCController::interpPose(const pips_tra
     return interp_pose;
 }
 
-pips_trajectory_msgs::trajectory_point PGHCController::findNearestPose(const pips_trajectory_msgs::trajectory_points& traj, const PoseSE2& robot_pose)
+pips_trajectory_msgs::trajectory_point SGHCController::findNearestPose(const pips_trajectory_msgs::trajectory_points& traj, const PoseSE2& robot_pose)
 {
     std::vector<double> pose_diff(traj.points.size());
     for (int i = 0; i < pose_diff.size(); i++) // i will always be positive, so this is fine
@@ -725,7 +725,7 @@ pips_trajectory_msgs::trajectory_point PGHCController::findNearestPose(const pip
     return traj.points[target_pose];
 }
 
-Eigen::Matrix2cd PGHCController::getComplexMatrix(double x, double y, double quat_w, double quat_z)
+Eigen::Matrix2cd SGHCController::getComplexMatrix(double x, double y, double quat_w, double quat_z)
 {
     std::complex<double> phase(quat_w, quat_z);
     phase = phase*phase;
@@ -746,14 +746,14 @@ Eigen::Matrix2cd PGHCController::getComplexMatrix(double x, double y, double qua
     return g;
 }
 
-double PGHCController::quat2Euler(geometry_msgs::Quaternion quat)
+double SGHCController::quat2Euler(geometry_msgs::Quaternion quat)
 {
     Eigen::Quaterniond q(quat.w, quat.x, quat.y, quat.z);
     auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
     return euler[2];
 }
 
-geometry_msgs::Quaternion PGHCController::euler2Quat(double euler)
+geometry_msgs::Quaternion SGHCController::euler2Quat(double euler)
 {
     double roll = 0, pitch = 0, yaw = euler;    
     Eigen::Quaterniond q;
@@ -770,7 +770,7 @@ geometry_msgs::Quaternion PGHCController::euler2Quat(double euler)
     return quat;
 }
 
-void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFeedback::ConstPtr& msg)
+void SGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFeedback::ConstPtr& msg)
 {
     // if ((int)msg->state.size() != _dynamics->getStateDimension())
     // {
@@ -784,7 +784,7 @@ void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFe
     _recent_x_feedback = Eigen::Map<const Eigen::VectorXd>(msg->state.data(), (int)msg->state.size());
 }
 
-// void PGHCController::publishOptimalControlResult()
+// void SGHCController::publishOptimalControlResult()
 // {
 //     if (!_dynamics) return;
 //     mpc_local_planner_msgs::OptimalControlResult msg;
@@ -810,13 +810,13 @@ void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFe
 //     _ocp_result_pub.publish(msg);
 // }
 
-void PGHCController::reset() 
+void SGHCController::reset() 
 { 
     PredictiveController::reset();
     mpc_fail_num_ = 0;
 }
 
-void PGHCController::configureParams(const ros::NodeHandle& nh)
+void SGHCController::configureParams(const ros::NodeHandle& nh)
 {
     // Dynamics
 
@@ -873,7 +873,7 @@ void PGHCController::configureParams(const ros::NodeHandle& nh)
     nh.param("cbf/cbf_kw", cbf_kw_, cbf_kw_);
 }
 
-void PGHCController::configureRobotDynamics(const ros::NodeHandle& nh)
+void SGHCController::configureRobotDynamics(const ros::NodeHandle& nh)
 {
     _robot_type = "unicycle";
     nh.param("robot/type", _robot_type, _robot_type);
@@ -911,7 +911,7 @@ void PGHCController::configureRobotDynamics(const ros::NodeHandle& nh)
     }
 }
 
-void PGHCController::configureNMPC(const ros::NodeHandle& nh)
+void SGHCController::configureNMPC(const ros::NodeHandle& nh)
 {
     std::string solver_type = "ipopt";
     nh.param("solver/type", solver_type, solver_type);
@@ -1085,7 +1085,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
     ROS_INFO_STREAM("Optimal solver created.");
 }
 
-// bool PGHCController::generateInitialStateTrajectory(const Eigen::VectorXd& x0, const Eigen::VectorXd& xf,
+// bool SGHCController::generateInitialStateTrajectory(const Eigen::VectorXd& x0, const Eigen::VectorXd& xf,
 //                                                 const std::vector<geometry_msgs::PoseStamped>& initial_plan, bool backward)
 // {
 //     if (initial_plan.size() < 2 || !_dynamics) return false;
@@ -1096,7 +1096,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     int n_ref  = _grid->getInitialN();
 //     if (n_ref < 2)
 //     {
-//         ROS_ERROR("PGHCController::generateInitialStateTrajectory(): grid not properly initialized");
+//         ROS_ERROR("SGHCController::generateInitialStateTrajectory(): grid not properly initialized");
 //         return false;
 //     }
 //     ts->add(0.0, x0);
@@ -1137,7 +1137,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     return true;
 // }
 
-// bool PGHCController::isPoseTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec,
+// bool SGHCController::isPoseTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec,
 //                                           double inscribed_radius, double circumscribed_radius, double min_resolution_collision_check_angular,
 //                                           int look_ahead_idx)
 // {
@@ -1197,7 +1197,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     return true;
 // }
 
-// MX PGHCController::getState(const geometry_msgs::PoseStamped& input_pose)
+// MX SGHCController::getState(const geometry_msgs::PoseStamped& input_pose)
 // {
 //     Eigen::Quaterniond q(input_pose.pose.orientation.x, input_pose.pose.orientation.y, input_pose.pose.orientation.z, input_pose.pose.orientation.w);
 //     auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
@@ -1209,4 +1209,4 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     return MX(std::vector<double>{x, y, yaw});
 // }
 
-}  // namespace mpc_local_planner
+}  // namespace sg_mpc_local_planner

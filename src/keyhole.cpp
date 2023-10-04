@@ -1,8 +1,8 @@
-#include "potential_gap_mpc/keyhole.hpp"
+#include "safer_gap/keyhole.hpp"
 
 using namespace operations_research;
 
-namespace pg_mpc_local_planner{
+namespace sg_mpc_local_planner{
 namespace keyhole{
 
 /********************************************************* 

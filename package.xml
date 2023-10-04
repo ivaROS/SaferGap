@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>potential_gap_mpc</name>
+  <name>safer_gap</name>
   <version>0.0.0</version>
-  <description>The potential_gap_mpc package</description>
+  <description>The safer_gap package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -93,8 +93,8 @@
   <exec_depend>message_runtime</exec_depend>
 
   <export>
-    <nav_core plugin="${prefix}/pg_mpc_local_planner_plugin.xml"/>
-    <mbf_costmap_core plugin="${prefix}/pg_mpc_local_planner_plugin.xml"/>
+    <nav_core plugin="${prefix}/sg_mpc_local_planner_plugin.xml"/>
+    <mbf_costmap_core plugin="${prefix}/sg_mpc_local_planner_plugin.xml"/>
   </export>
 
 </package>

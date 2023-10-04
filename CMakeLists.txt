@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(potential_gap_mpc)
+project(safer_gap)
 
 ## Compile as C++17, supported in ROS Kinetic and newer
 add_compile_options(-std=c++17)
@@ -106,12 +106,12 @@ target_link_libraries(keyhole
   ${catkin_LIBRARIES}
 )
 
-add_library(pg_mpc_hc_local_planner
+add_library(sg_mpc_hc_local_planner
    src/controller_hc.cpp
-   src/pg_mpc_hc_local_planner_ros.cpp
+   src/sg_mpc_hc_local_planner_ros.cpp
 )
 
-target_link_libraries(pg_mpc_hc_local_planner
+target_link_libraries(sg_mpc_hc_local_planner
   keyhole
   corbo_controllers
   casadi
@@ -127,7 +127,7 @@ install(DIRECTORY include/${PROJECT_NAME}/
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
 install(FILES
-  pg_mpc_local_planner_plugin.xml
+  sg_mpc_local_planner_plugin.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 

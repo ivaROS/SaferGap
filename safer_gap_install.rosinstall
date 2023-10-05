@@ -75,6 +75,10 @@
     uri: git@github.com:ivaROS/pips_trajectory_testing.git
     version: safer_gap
 - git:
+    local-name: pips_visualization
+    uri: git@github.com:ivaROS/pips_visualization.git
+    version: main
+- git:
     local-name: realsense_gazebo_plugin
     uri: https://github.com/ivaROS/realsense_gazebo_plugin.git
     version: add_pointcloud_d435

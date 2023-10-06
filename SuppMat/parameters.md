@@ -46,7 +46,7 @@ The implementation has been configured for use by a Turtlebot 2 robot. Many of t
 Feedback gains for PG<sup>-</sup>, SG<sup>-</sup>, PG, and SG. Other parameters are the same as above.
 
 | Planner | Parameter |        Value      | Meaning |
-| ------- | --------- | :---------------: | ------- |
+| ------- | --------- | :-----------------: | ------- |
 | PG<sup>-</sup>/SG<sup>-</sup> | k<sub>x</sub> | STDR: 4, Gazebo: 3 | Conversion gain for mapping longitudinal feedback to forward speed. |
 |  | k<sub>y</sub> | STDR: 4, Gazebo: 3.5 | Conversion gain for mapping lateral feedback to turn rates for standard nonholonomic vehicles. |
 |  | k<sub>w</sub> | STDR: 0.5, Gazebo: 2 | Conversion gain for mapping orientation feedback to turn rates for standard nonholonomic vehicles. |

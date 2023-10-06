@@ -11,7 +11,7 @@ The implementation has been configured for use by a Turtlebot 2 robot. Many of t
 | w<sub>2</sub> | 20 | Orientation weight in the path scoring function. It penalizes the orientation difference between end pose and initial pose.  |
 | w<sub>3</sub> | 3 | Decay factor on penalty for getting close to an obstacle point. |
 | c<sub>obs</sub> | -1 | Amplification factor and sign correction for the obstacle proximity penalty. |
-| r<sub>ins</sub> | r<sub>inf</sub> | Inscribed radius of the robot. Determined by geometry of the robot. Value here is for the Turtlebot. |
+| r<sub>ins</sub> | 0.22 | Inscribed radius of the robot. Determined by geometry of the robot. Value here is for the Turtlebot. |
 | r<sub>max</sub> | 0.3 | Maximum distance to decide if the cost is zero. If the distance to obstacle is large enough, there is no need to include in the cost computing. This value should be larger than r<sub>ins</sub>. |
 
 ### Keyhole ZBF Synthesis
@@ -43,11 +43,11 @@ The implementation has been configured for use by a Turtlebot 2 robot. Many of t
 
 ### Ablation Study Parameters
 
-Feedback gains for PG<sup>&-;</sup>, SG<sup>&-;</sup>, PG, and SG. Other parameters are the same as above.
+Feedback gains for PG<sup>-</sup>, SG<sup>-</sup>, PG, and SG. Other parameters are the same as above.
 
 | Planner | Parameter |        Value      | Meaning |
 | ------- | --------- | :---------------: | ------- |
-| PG<sup>&-;</sup>/SG<sup>&-;</sup> | k<sub>x</sub> | STDR: 4, Gazebo: 3 | Conversion gain for mapping longitudinal feedback to forward speed. |
+| PG<sup>-</sup>/SG<sup>-</sup> | k<sub>x</sub> | STDR: 4, Gazebo: 3 | Conversion gain for mapping longitudinal feedback to forward speed. |
 |  | k<sub>y</sub> | STDR: 4, Gazebo: 3.5 | Conversion gain for mapping lateral feedback to turn rates for standard nonholonomic vehicles. |
 |  | k<sub>w</sub> | STDR: 0.5, Gazebo: 2 | Conversion gain for mapping orientation feedback to turn rates for standard nonholonomic vehicles. |
 | PG/SG | k<sub>x</sub> | STDR: 2, Gazebo: 2 | Conversion gain for mapping longitudinal feedback to forward speed. |

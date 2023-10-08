@@ -7,8 +7,8 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 
 ## Supplementary materials
 
-- [Parameters](https://github.com/ivaROS/SaferGap/blob/main/SuppMat/parameters.md)
-- [Ablation Study Results](https://github.com/ivaROS/SaferGap/blob/main/SuppMat/assets/ablation_study_results.pdf)
+- [Parameters](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/parameters.md)
+- [Ablation Study Results](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/assets/ablation_study_results.pdf)
 
 # Dependencies and Installation
 
@@ -18,7 +18,7 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 
 - Google or-tools: [download the binary package](https://developers.google.com/optimization/install/cpp) on your system.
 
-- Safer Gap: See the [installation instructions](https://github.com/ivaROS/SaferGap/blob/main/installation_guide.md)
+- Safer Gap: See the [installation instructions](https://github.com/ivaROS/SaferGap/blob/master/installation_guide.md)
 
 # License
 The source code is released under [MIT](https://opensource.org/licenses/MIT) license. 

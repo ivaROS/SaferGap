@@ -37,7 +37,8 @@ Ignore the complaint for any `Cannot locate rosdep definition for [common_rosdep
 6. Go to `CMakeLists.txt`. Adjust the line 68 and 93 to be compatible with your paths to google or-tools `lib` and `include` directories:
 
 7. Build all packages:
-
-	catkin config --cmake-args -DCMAKE_BUILD_TYPE=Release
-	catkin build
+```
+catkin config --cmake-args -DCMAKE_BUILD_TYPE=Release
+catkin build
+```
 

@@ -20,6 +20,47 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 
 - Safer Gap: See the [installation instructions](https://github.com/ivaROS/SaferGap/blob/master/installation_guide.md)
 
+# Run safer gap in simulation
+
+## STDR
+
+Start simulation
+```
+roslaunch bezier_gap_benchmark stdr_nonholonomic_sector_laser_world.launch
+```
+
+Start safer gap
+```
+roslaunch bezier_gap_benchmark bgap_mpc_casadi_nonholonomic_controller
+```
+
+Open Rviz, then send goal points
+```
+rviz -d PATH_TO_SAFER_GAP_BENCHMARK/safer_gap_benchmark/rviz/bgap_mpc_stdr.rviz
+```
+
+## Gazebo
+
+Start simulation environment
+```
+roslaunch nav_configs gazebo_sector_world.launch
+```
+
+Spawn robot in the environment
+```
+roslaunch nav_configs spawn_turtlebot.launch
+```
+
+Start safer gap
+```
+roslaunch nav_scripts turtlebot_sgap_mpc_casadi_controller.launch
+```
+
+Open Rviz, then send goal points
+```
+rviz -d PATH_TO_SAFER_GAP_BENCHMARK/safer_gap_benchmark/rviz/bgap_mpc.rviz
+```
+
 # License
 The source code is released under [MIT](https://opensource.org/licenses/MIT) license. 
 

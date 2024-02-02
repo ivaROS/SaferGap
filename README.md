@@ -9,6 +9,7 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 
 - [Parameters](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/parameters.md)
 - [Ablation Study Results](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/assets/ablation_study_results.pdf)
+- [3D Visualization of ZBF](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/ZBF_3D_visual.md)
 
 # Dependencies and Installation
 

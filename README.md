@@ -27,12 +27,12 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 
 Start simulation
 ```
-roslaunch bezier_gap_benchmark stdr_nonholonomic_sector_laser_world.launch
+roslaunch safer_gap_benchmark stdr_nonholonomic_sector_laser_world.launch
 ```
 
 Start safer gap
 ```
-roslaunch bezier_gap_benchmark bgap_mpc_casadi_nonholonomic_controller
+roslaunch safer_gap_benchmark bgap_mpc_casadi_nonholonomic_controller
 ```
 
 Open Rviz, then send goal points

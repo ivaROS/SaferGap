@@ -56,7 +56,7 @@ roslaunch nav_configs spawn_turtlebot.launch
 
 Start safer gap
 ```
-roslaunch nav_scripts turtlebot_sgap_mpc_casadi_controller.launch
+roslaunch nav_scripts turtlebot_bgap_mpc_casadi_controller.launch
 ```
 
 Open Rviz, then send goal points

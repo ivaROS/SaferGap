@@ -20,8 +20,8 @@
  *  Authors: Christoph Rösmann
  *********************************************************************/
 
-#ifndef SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
-#define SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#ifndef PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#define PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
 
 #include <ros/ros.h>
 
@@ -35,7 +35,7 @@
 // mpc_local_planner related classes
 #include <safer_gap/controller_hc.h>
 #include <mpc_local_planner/utils/publisher.h>
-#include <safer_gap/print_utils.h>
+#include <safer_gap/utils.h>
 
 // teb_local_planner related classes
 #include <teb_local_planner/obstacles.h>
@@ -91,8 +91,9 @@
 
 #include <cubic_spline_smoother/cubic_spline_interpolator.h>
 #include <safer_gap/OptimalStats.h>
+#include <safer_gap/TimingStats.h>
 
-namespace sg_mpc_local_planner {
+namespace pg_mpc_local_planner {
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
@@ -104,12 +105,12 @@ typedef TurtlebotGenAndTest::TrajBridge TrajBridge;
 typedef std::shared_ptr<TurtlebotGenAndTest> GenAndTest_ptr;
 
 /**
- * @class SGMpcHcLocalPlannerROS
+ * @class PGMpcHcLocalPlannerROS
  * @brief Implements both nav_core::BaseLocalPlanner and mbf_costmap_core::CostmapController abstract
  * interfaces, so the teb_local_planner plugin can be used both in move_base and move_base_flex (MBF).
  * @todo Escape behavior, more efficient obstacle handling
  */
-class SGMpcHcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap_core::CostmapController
+class PGMpcHcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap_core::CostmapController
 {
    using PoseSE2                = teb_local_planner::PoseSE2;
    using RobotFootprintModelPtr = teb_local_planner::RobotFootprintModelPtr;
@@ -127,11 +128,11 @@ public:
    /**
     * @brief Default constructor of the plugin
     */
-   SGMpcHcLocalPlannerROS();
+   PGMpcHcLocalPlannerROS();
    /**
     * @brief  Destructor of the plugin
     */
-   ~SGMpcHcLocalPlannerROS();
+   ~PGMpcHcLocalPlannerROS();
 
    /**
     * @brief Initializes the teb plugin
@@ -385,6 +386,12 @@ protected:
 
    pips_trajectory_msgs::trajectory_points parameterizeT(std::vector<geometry_msgs::PoseStamped>& raw_path, double start_v, double desired_vel, double desired_acc);
 
+   pips_trajectory_msgs::trajectory_points parameterizeVW(std::vector<geometry_msgs::PoseStamped>& raw_path, double start_v, double desired_vel, double desired_acc, double v_max, double w_max);
+   pips_trajectory_msgs::trajectory_points parameterizeVW2(std::vector<geometry_msgs::PoseStamped>& raw_path, double start_v, double desired_vel, double desired_acc, double v_max, double w_max);
+   pips_trajectory_msgs::trajectory_points addBetweenPoints(pips_trajectory_msgs::trajectory_points& init_traj);
+
+   pips_trajectory_msgs::trajectory_points convertToPipsTraj(std::vector<geometry_msgs::PoseStamped>& raw_path, std::vector<potential_gap::BezierPoint>& bpt);
+
    // double estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped>& global_plan, const geometry_msgs::PoseStamped& local_goal,
    //                                     int current_goal_idx, const geometry_msgs::TransformStamped& tf_plan_to_global,
    //                                     int moving_average_length = 3) const;
@@ -411,6 +418,12 @@ protected:
    void pubKeyholeLevelset(const std::shared_ptr<keyhole::Keyhole>& keyhole, std::string frame_id);
 
    nav_msgs::Path xSeqToPathMsg(const DM& x_seq, std_msgs::Header header);
+
+   void resetTimingStats()
+   {
+      sgap_time_ = 0;
+      traj_time_ = 0;
+   }
 
 private:
    // Definition of member variables
@@ -440,13 +453,15 @@ private:
    boost::shared_ptr<path_smoother::CubicSplineInterpolator> traj_csi_;
    pips_trajectory_msgs::trajectory_points timed_plan_;
 
-   bool ni_enabled_;
+   bool ni_enabled_, time_dilation_, simple_dilation_;
    boost::shared_ptr<turtlebot_trajectory_testing::NIConfigUtility> ni_util_;
    GenAndTest_ptr traj_tester_;
 
    bool use_pose_controller_, has_feedforward_;
 
-   ros::Publisher mpc_traj_pub_;
+   ros::Publisher time_dilated_traj_pub_, time_dilated_path_pub_;
+
+   ros::Publisher ref_traj_pub_, mpc_traj_pub_;
    ros::Publisher mpc_optimal_stats_pub_;
 
    bool prev_success_;
@@ -455,10 +470,16 @@ private:
    dynamic_reconfigure::Server<potential_gap::pgConfig>::CallbackType f_;
 
    // internal objects
-   SGHCController _controller;
+   PGHCController _controller;
+   potential_gap::BezierPathProfile _bezier_path;
+   geometry_msgs::PoseArray _bezier_dilated_path;
+   std::vector<potential_gap::BezierPoint> _bezier_points;
+
    ObstContainer _obstacles;  //!< Obstacle vector that should be considered during local trajectory optimization
    Publisher _publisher;
    std::shared_ptr<base_local_planner::CostmapModel> _costmap_model;
+
+   dynamicsParams dyn_params_;
 
    corbo::TimeSeries::Ptr _x_seq = std::make_shared<corbo::TimeSeries>();
    corbo::TimeSeries::Ptr _u_seq = std::make_shared<corbo::TimeSeries>();
@@ -502,6 +523,10 @@ private:
    std::string _global_frame;      //!< The frame in which the controller will run
    std::string _robot_base_frame;  //!< Used as the base frame id of the robot
 
+   // Timing stats
+   ros::Publisher timing_stats_pub_;
+   double sgap_time_, traj_time_;
+
    // flags
    bool _initialized;  //!< Keeps track about the correct initialization of this class
 
@@ -535,6 +560,6 @@ public:
    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-};  // end namespace sg_mpc_local_planner
+};  // end namespace mpc_local_planner
 
-#endif  // SG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_
+#endif  // PG_MPC_HARD_CSTR_LOCAL_PLANNER_ROS_H_

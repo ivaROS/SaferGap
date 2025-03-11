@@ -18,18 +18,20 @@
 using namespace std;
 using namespace operations_research;
 
-namespace sg_mpc_local_planner{
+namespace pg_mpc_local_planner{
 namespace keyhole{
 
 struct KeyholeParam{
     Eigen::VectorXd a;
     Eigen::Vector2d c1, c2, c3, c4, c5;
     double d1, d2, d3, d4, d5;
+    Eigen::Vector2d xc;
+    double r;
 
     KeyholeParam() {};
 
     KeyholeParam(Eigen::VectorXd a_in, Eigen::Vector2d c1_in, Eigen::Vector2d c2_in, Eigen::Vector2d c3_in, Eigen::Vector2d c4_in, Eigen::Vector2d c5_in,
-                double d1_in, double d2_in, double d3_in, double d4_in, double d5_in)
+                double d1_in, double d2_in, double d3_in, double d4_in, double d5_in, Eigen::Vector2d xc_in = Eigen::Vector2d(0, 0), double r_in = 0)
     {
         a = a_in;
 
@@ -44,6 +46,9 @@ struct KeyholeParam{
         d3 = d3_in;
         d4 = d4_in;
         d5 = d5_in;
+
+        xc = xc_in;
+        r = r_in;
     }
 };
 
@@ -152,6 +157,8 @@ class Keyhole{
 
         void get_line_train_points(MatrixXd &safe_points, MatrixXd &unsafe_points, bool line1, Vector2d p);
         void get_line_train_points(MatrixXd &safe_points, MatrixXd &unsafe_points, bool line1, Vector2d q, Vector2d p);
+
+        void correct_corner_points(MatrixXd &c_safe, MatrixXd &l1_safe, MatrixXd &l2_safe);
 
         /**
          * @brief Synthesize BF using LP.
@@ -263,6 +270,17 @@ class Keyhole{
             return lines;
         }
 
+        // new methods
+        void get_training_circle(const Vector2d &xc, const double  &r, const Vector2d &q1, const Vector2d &q2,
+            MatrixXd &c_safe, MatrixXd &c_unsafe, const double &inc_angle, const double &offset);
+
+        void get_training_line(const Vector2d &c, const double &d, const Vector2d &q, const Vector2d &p,
+            MatrixXd &l_safe, MatrixXd &l_unsafe, const double &dis_inc, const double &offset);
+
+        Vector2d push_back(const Vector2d &c, const double &d, const Vector2d &q, const Vector2d &p, const double &gam);
+
+        MatrixXd pt_int_;
+
     private:
         bool initialized_, same_keyhole_ = false;
 
@@ -323,10 +341,21 @@ class Keyhole{
         void extend_parameters_(Vector2d xc, double r, Vector2d q1, Vector2d q2, Vector2d &p1, Vector2d &p2);
 
         static autodiff::real bf_model_(autodiff::ArrayXreal &x, Keyhole *cbf);
-        
-        void correct_corner_points_(MatrixXd &c_safe, MatrixXd &l1_safe, MatrixXd &l2_safe);
 
         MatrixXd removeRow_(MatrixXd &mat, const int &rowNum);
+
+        // new methods
+        void get_line_ceofficients_(const Vector2d &p0, const Vector2d &p1, const Vector2d &p_check, Vector2d &c, double &d);
+
+        bool is_in_(const Vector2d &v, const Vector2d &p, const Vector2d &q);
+
+        void correct_pints_(const Vector2d &c1, const double &d1, const Vector2d &c2, const double &d2, MatrixXd &safe1, MatrixXd &safe2);
+
+        MatrixXd filterMat_(Array<bool, Dynamic, 1> &filter, MatrixXd mat);
+
+        void correct_points_dis_(const Vector2d &c, const double &d, const double &h, MatrixXd &safe);
+
+        void correct_corner_points_(MatrixXd &c_safe, MatrixXd &l1_safe, MatrixXd &l2_safe);
 };
 
 }

@@ -1,11 +1,11 @@
 - git:
     local-name: PotentialGap
     uri: git@github.com:ivaROS/PotentialGap.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: SaferGap
     uri: git@github.com:ivaROS/SaferGap.git
-    version: master
+    version: ral24
 - git:
     local-name: control_box_rst
     uri: git@github.com:ivaROS/control_box_rst.git
@@ -13,15 +13,15 @@
 - git:
     local-name: cubic_spline_smoother
     uri: git@github.com:ivaROS/cubic_spline_smoother.git
-    version: main
+    version: safer_gap_ral24
 - git:
     local-name: customized_rotate_recovery
     uri: git@github.com:ivaROS/customized_rotate_recovery.git
-    version: main
+    version: safer_gap_ral24
 - git:
     local-name: egocircle
     uri: git@github.com:ivaROS/egocircle.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: egocircle_utils
     uri: git@github.com:ivaROS/egocircle_utils.git
@@ -29,7 +29,7 @@
 - git:
     local-name: egocylindrical
     uri: git@github.com:ivaROS/egocylindrical.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: full_depthimage_to_laserscan
     uri: git@github.com:ivaROS/full_depthimage_to_laserscan.git
@@ -45,11 +45,11 @@
 - git:
     local-name: mpc_local_planner
     uri: git@github.com:ivaROS/mpc_local_planner.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: navigation_test
     uri: git@github.com:ivaROS/navigation_test.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: pips
     uri: git@github.com:ivaROS/pips.git
@@ -61,7 +61,7 @@
 - git:
     local-name: pips_egocylindrical
     uri: git@github.com:ivaROS/pips_egocylindrical.git
-    version: safer_gap
+    version: safer_gap_ral24
 - git:
     local-name: pips_msgs
     uri: git@github.com:ivaROS/pips_msgs.git
@@ -85,7 +85,7 @@
 - git:
     local-name: safer_gap_benchmark
     uri: git@github.com:ivaROS/safer_gap_benchmark.git
-    version: main
+    version: safer_gap_ral24
 - git:
     local-name: stdr_simulator
     uri: https://github.com/ivaROS/stdr_simulator.git

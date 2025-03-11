@@ -20,8 +20,8 @@
  *  Authors: Shiyu Feng
  *********************************************************************/
 
-#ifndef PG_MPC_HARD_CSTR_CONTROLLER_H_
-#define PG_MPC_HARD_CSTR_CONTROLLER_H_
+#ifndef PG_MPC_HARD_CSTR_CONTROLLER_ACADOS_H_
+#define PG_MPC_HARD_CSTR_CONTROLLER_ACADOS_H_
 
 #include <corbo-controllers/predictive_controller.h>
 
@@ -55,6 +55,22 @@
 
 #include <safer_gap/TimingStats.h>
 
+// acados
+#include "acados/utils/print.h"
+#include "acados_c/ocp_nlp_interface.h"
+#include "acados_c/external_function_interface.h"
+#include "acados/ocp_nlp/ocp_nlp_constraints_bgh.h"
+#include "acados/ocp_nlp/ocp_nlp_cost_ls.h"
+
+// blasfeo
+#include "blasfeo/include/blasfeo_d_aux.h"
+#include "blasfeo/include/blasfeo_d_aux_ext_dep.h"
+
+// crazyflie specific
+#include "unicycle_keyhole_mpc_model/unicycle_keyhole_mpc_model.h"
+#include "unicycle_keyhole_mpc_constraints/unicycle_keyhole_mpc_constraints.h"
+#include "acados_solver_unicycle_keyhole_mpc.h"
+
 namespace pg_mpc_local_planner {
 
 using namespace mpc_local_planner;
@@ -68,20 +84,19 @@ using namespace casadi;
  * @author Shiyu Feng (shiyufeng@gatech.edu)
  */
 
-
-class PGHCController : public corbo::PredictiveController
+class PGHCAcadosController : public corbo::PredictiveController
 {
 public:
-   using Ptr     = std::shared_ptr<PGHCController>;
+   using Ptr     = std::shared_ptr<PGHCAcadosController>;
    using PoseSE2 = teb_local_planner::PoseSE2;
 
-   PGHCController() = default;
+   PGHCAcadosController() = default;
 
    bool configure(ros::NodeHandle& nh);
    bool configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled=false);
 
    bool stepHC(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, potential_gap::RobotGeoProc& robot_geo, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
-            DM& u_opt, DM& x_seq, DM& ref);
+            DM& u_opt, DM& x_seq);
 
    bool stepPCont(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
             bool has_feedforward, Eigen::Vector2f& u_opt);
@@ -97,8 +112,8 @@ public:
 //            corbo::TimeSeries::Ptr x_seq);
 
    // implements interface method
-   corbo::ControllerInterface::Ptr getInstance() const override { return std::make_shared<PGHCController>(); }
-   static corbo::ControllerInterface::Ptr getInstanceStatic() { return std::make_shared<PGHCController>(); }
+   corbo::ControllerInterface::Ptr getInstance() const override { return std::make_shared<PGHCAcadosController>(); }
+   static corbo::ControllerInterface::Ptr getInstanceStatic() { return std::make_shared<PGHCAcadosController>(); }
 
 //  void setOptimalControlProblem(corbo::OptimalControlProblemInterface::Ptr ocp) = delete;
 
@@ -183,11 +198,6 @@ public:
       po_time_ = 0;
    }
 
-   dynamicsParams getDynamicLimits()
-   {
-      return dyn_params_;
-   }
-
 protected:
    void configureParams(const ros::NodeHandle& nh);
    void configureRobotDynamics(const ros::NodeHandle& nh);
@@ -253,7 +263,7 @@ protected:
    int ctrl_ahead_pose_;
 
    //PO
-   bool use_po_ = false, po_always_triggered_ = false;
+   bool use_po_ = false;
    double r_norm_, r_norm_offset_, r_inscr_, r_min_;
    double k_po_, k_po_turn_;
 
@@ -262,8 +272,18 @@ protected:
 
    // Timing
    double keyhole_time_, mpc_time_, po_time_;
+
+   // acados
+   int nx_aug, nu_aug, ny;
+   unicycle_keyhole_mpc_solver_capsule *acados_ocp_capsule;
+   ocp_nlp_config *nlp_config;
+   ocp_nlp_dims *nlp_dims;
+   ocp_nlp_in *nlp_in;
+   ocp_nlp_out *nlp_out;
+   ocp_nlp_solver *nlp_solver;
+   void *nlp_opts;
 };
 
 }  // namespace pg_mpc_local_planner
 
-#endif  // PG_MPC_HARD_CSTR_CONTROLLER_H_
+#endif  // PG_MPC_HARD_CSTR_CONTROLLER_ACADOS_H_

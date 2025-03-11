@@ -20,7 +20,7 @@
  *  Authors: Christoph Rösmann
  *********************************************************************/
 
-#include <safer_gap/controller_hc.h>
+#include <safer_gap/controller_hc_acados.h>
 
 #include <corbo-optimal-control/functions/hybrid_cost.h>
 #include <corbo-optimal-control/functions/minimum_time.h>
@@ -58,7 +58,7 @@
 
 namespace pg_mpc_local_planner {
 
-bool PGHCController::configure(ros::NodeHandle& nh)
+bool PGHCAcadosController::configure(ros::NodeHandle& nh)
 {
     mpc_fail_num_ = 0;
     keyhole_fail_num_ = 0;
@@ -80,7 +80,6 @@ bool PGHCController::configure(ros::NodeHandle& nh)
     nh.param("controller/pose_con/ctrl_ahead_pose", ctrl_ahead_pose_, ctrl_ahead_pose_);
 
     nh.param("controller/use_po", use_po_, use_po_);
-    nh.param("controller/po/po_always_triggered", po_always_triggered_, po_always_triggered_);
     r_norm_ = 1, r_norm_offset_ = 0, r_inscr_ = 0.2, r_min_ = 0.36;
     k_po_ = 1, k_po_turn_ = 1;
     nh.param("controller/po/r_norm", r_norm_, r_norm_);
@@ -103,19 +102,19 @@ bool PGHCController::configure(ros::NodeHandle& nh)
 
     // custom feedback:
     nh.param("controller/prefer_x_feedback", _prefer_x_feedback, _prefer_x_feedback);
-    _x_feedback_sub = nh.subscribe("state_feedback", 1, &PGHCController::stateFeedbackCallback, this);
+    _x_feedback_sub = nh.subscribe("state_feedback", 1, &PGHCAcadosController::stateFeedbackCallback, this);
     
     return true;
 }
 
-bool PGHCController::configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled)
+bool PGHCAcadosController::configure(ros::NodeHandle& nh, double controller_frequency, bool ni_enabled)
 {
     time_int_ = 1.0 / controller_frequency;
     ni_enabled_ = ni_enabled;
     return configure(nh);
 }
 
-// bool PGHCController::step(const PGHCController::PoseSE2& start, const PGHCController::PoseSE2& goal, const geometry_msgs::Twist& vel, double dt, ros::Time t,
+// bool PGHCAcadosController::step(const PGHCAcadosController::PoseSE2& start, const PGHCAcadosController::PoseSE2& goal, const geometry_msgs::Twist& vel, double dt, ros::Time t,
 //                       corbo::TimeSeries::Ptr u_seq, corbo::TimeSeries::Ptr x_seq)
 // {
 //     std::vector<geometry_msgs::PoseStamped> initial_plan(2);
@@ -124,8 +123,8 @@ bool PGHCController::configure(ros::NodeHandle& nh, double controller_frequency,
 //     return step(initial_plan, vel, dt, t, u_seq, x_seq);
 // }
 
-bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, potential_gap::RobotGeoProc& robot_geo, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
-                      DM& u_opt, DM& x_seq, DM& ref)
+bool PGHCAcadosController::stepHC(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, potential_gap::RobotGeoProc& robot_geo, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
+                      DM& u_opt, DM& x_seq)
 {
     if (initial_plan.points.size() < 2)
     {
@@ -148,44 +147,68 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
         }
         return false;
     }
-    
-    pips_trajectory_msgs::trajectory_point start_pose(initial_plan.points.front());
-    pips_trajectory_msgs::trajectory_point goal_pose(initial_plan.points.back());
 
-    DM u0 = prev_u_;
-    DM x_0 = DM(std::vector<double>{robot_pose.x(), robot_pose.y(), robot_pose.theta()});
-    DM X0 = DM::zeros(nx, N_+1);
+    double lbx0[nx_aug];
+    double ubx0[nx_aug];
+    lbx0[0] = robot_pose.x();
+    ubx0[0] = robot_pose.x();
+    lbx0[1] = robot_pose.y();
+    ubx0[1] = robot_pose.y();
+    lbx0[2] = robot_pose.theta();
+    ubx0[2] = robot_pose.theta();
+    lbx0[3] = prev_u_.get_elements()[0];
+    ubx0[3] = prev_u_.get_elements()[0];
+    lbx0[4] = prev_u_.get_elements()[1];
+    ubx0[4] = prev_u_.get_elements()[1];
 
-    for(size_t i = 0; i < N_+1; i++)
+    ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "lbx", lbx0);
+    ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "ubx", ubx0);
+
+    // initialization for state values
+    double x_init[nx_aug];
+    x_init[0] = robot_pose.x();
+    x_init[1] = robot_pose.y();
+    x_init[2] = robot_pose.theta();
+    x_init[3] = prev_u_.get_elements()[0];
+    x_init[4] = prev_u_.get_elements()[1];
+
+    // initial value for control input
+    double u0[nu_aug];
+    u0[0] = prev_u_.get_elements()[0];
+    u0[1] = prev_u_.get_elements()[1];
+    u0[2] = 0.0;
+    u0[3] = 0.0;
+
+    // initialize solution
+    for (int i = 0; i < N_; i++)
     {
-        X0(Slice(i*nx)) = x_0(0);
-        X0(Slice(i*nx+1)) = x_0(1);
-        X0(Slice(i*nx+2)) = x_0(2);
+        ocp_nlp_out_set(nlp_config, nlp_dims, nlp_out, i, "x", x_init);
+        ocp_nlp_out_set(nlp_config, nlp_dims, nlp_out, i, "u", u0);
     }
-    X0 = X0.T();
-    
-    const_args_["p"](Slice(0,nx)) = x_0;
+    ocp_nlp_out_set(nlp_config, nlp_dims, nlp_out, N_, "x", x_init);
+
+    DM x_0 = DM(std::vector<double>{robot_pose.x(), robot_pose.y(), robot_pose.theta()});
     
     ROS_INFO_STREAM_COND(print_debug_info_, "x0: " << x_0);
-    // ROS_INFO_STREAM("X0: " << X0);
 
     for(size_t i = 0; i < N_; i++)
     {
         double t = t_diff.toSec() + i * time_int_;
         pips_trajectory_msgs::trajectory_point interp_pose = interpPose(initial_plan, t);
 
-        const_args_["p"]((5*i+3)) = interp_pose.x;
-        const_args_["p"]((5*i+4)) = interp_pose.y;
-        const_args_["p"]((5*i+5)) = interp_pose.theta;
-        const_args_["p"]((5*i+6)) = interp_pose.v;
-        const_args_["p"]((5*i+7)) = interp_pose.w;
-    }
+        // std::cout << interp_pose << std::endl;
 
-    ref = const_args_["p"](Slice(3, 5 * (N_ - 1) + 7 + 1));
-    ref = reshape(ref, 5, N_);
-    ROS_INFO_STREAM_COND(print_debug_info_, "ref: " << ref);
+        double yref[ny] = {interp_pose.x, interp_pose.y, interp_pose.theta, interp_pose.v, interp_pose.w, interp_pose.v, interp_pose.w, 0, 0};
+		ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "yref", yref);
+    }
+    double nt = t_diff.toSec() + N_ * time_int_;
+    pips_trajectory_msgs::trajectory_point interp_pose_n = interpPose(initial_plan, nt);
+    double yref_n[ny] = {interp_pose_n.x, interp_pose_n.y, interp_pose_n.theta, interp_pose_n.v, interp_pose_n.w, interp_pose_n.v, interp_pose_n.w, 0, 0};
+	ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N_, "yref", yref_n);
 
     ros::WallTime mpc_start = ros::WallTime::now();
+
+    double acados_p[34];
 
     bool mpc_ready = false;
     bool optimal_found = false;
@@ -199,7 +222,7 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
         Eigen::Vector2d lgap = gap.getLMapVec();
         Eigen::Vector2d rgap = gap.getRMapVec();
         
-        // ROS_INFO_STREAM("Gap input to keyhole: " << gap.start_time_ << "\n" << xc << "\n" << r << "\n" << l_int << "\n" << r_int << "\n" << lgap << "\n" << rgap);
+        // ROS_INFO_STREAM("Gap input to keyhole: \n" << xc << "\n" << r << "\n" << l_int << "\n" << r_int << "\n" << lgap << "\n" << rgap);
 
         ros::WallTime start = ros::WallTime::now();
         
@@ -210,16 +233,6 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
         ros::WallDuration keyhole_elapsed = ros::WallTime::now() - start;
         float keyhole_time_elapsed = float(keyhole_elapsed.toNSec())/1000000;
         ROS_INFO_STREAM_COND(print_timing_, "Keyhole time: " << keyhole_time_elapsed << " ms. Found keyhole: " << keyhole_found);
-        if(!keyhole_found){
-            // ROS_INFO_STREAM_COND(print_timing_, 
-            // "xc=[" << xc[0] << "," << xc[1] << "]\n" <<
-            // "q1=[" << l_int[0] << "," << l_int[1] << "]\n" <<
-            // "q2=[" << r_int[0] << "," << r_int[1] << "]\n" <<
-            // "p1=[" << lgap[0] << "," << lgap[1] << "]\n" <<
-            // "p2=[" << rgap[0] << "," << rgap[1] << "]\n" <<
-            // "r=" << r);
-            std::cout << *keyhole_ << std::endl;
-        }
         keyhole_time_ = (double) keyhole_time_elapsed;
 
         mpc_start = ros::WallTime::now();
@@ -236,34 +249,33 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
 
             // ROS_INFO_STREAM("Keyhole params: \n " << a << " \n " << c1 << " \n " << c2 << " \n " << c3 << " \n " << d1 << " \n " << d2 << " \n " << d3);
 
-            int ref_num = nx + N_ * (nx + nu);
-            const_args_["p"](ref_num) = c1(0);
-            const_args_["p"](ref_num+1) = c1(1);
-            const_args_["p"](ref_num+2) = d1;
+            acados_p[0] = c1(0);
+            acados_p[1] = c1(1);
+            acados_p[2] = d1;
 
-            const_args_["p"](ref_num+3) = c2(0);
-            const_args_["p"](ref_num+4) = c2(1);
-            const_args_["p"](ref_num+5) = d2;
+            acados_p[3] = c2(0);
+            acados_p[4] = c2(1);
+            acados_p[5] = d2;
 
-            const_args_["p"](ref_num+6) = c3(0);
-            const_args_["p"](ref_num+7) = c3(1);
-            const_args_["p"](ref_num+8) = d3;
+            acados_p[6] = c3(0);
+            acados_p[7] = c3(1);
+            acados_p[8] = d3;
 
-            const_args_["p"](ref_num+9) = c4(0);
-            const_args_["p"](ref_num+10) = c4(1);
-            const_args_["p"](ref_num+11) = d4;
+            acados_p[9] = c4(0);
+            acados_p[10] = c4(1);
+            acados_p[11] = d4;
 
-            const_args_["p"](ref_num+12) = c5(0);
-            const_args_["p"](ref_num+13) = c5(1);
-            const_args_["p"](ref_num+14) = d5;
+            acados_p[12] = c5(0);
+            acados_p[13] = c5(1);
+            acados_p[14] = d5;
 
-            const_args_["p"](ref_num+15) = xc(0);
-            const_args_["p"](ref_num+16) = xc(1);
-            const_args_["p"](ref_num+17) = r;
+            acados_p[15] = xc(0);
+            acados_p[16] = xc(1);
+            acados_p[17] = r;
 
             for(size_t i = 0; i < 16; i++)
             {
-                const_args_["p"](ref_num+18+i) = a(i);
+                acados_p[18+i] = a(i);
             }
 
             mpc_ready = true;
@@ -282,34 +294,33 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
             bool use_prev_keyhole = true;
             if(use_prev_keyhole && init_keyhole_)
             {
-                int ref_num = nx + N_ * (nx + nu);
-                const_args_["p"](ref_num) = prev_suc_keyhole_.c1(0);
-                const_args_["p"](ref_num+1) = prev_suc_keyhole_.c1(1);
-                const_args_["p"](ref_num+2) = prev_suc_keyhole_.d1;
+                acados_p[0] = prev_suc_keyhole_.c1(0);
+                acados_p[1] = prev_suc_keyhole_.c1(1);
+                acados_p[2] = prev_suc_keyhole_.d1;
 
-                const_args_["p"](ref_num+3) = prev_suc_keyhole_.c2(0);
-                const_args_["p"](ref_num+4) = prev_suc_keyhole_.c2(1);
-                const_args_["p"](ref_num+5) = prev_suc_keyhole_.d2;
+                acados_p[3] = prev_suc_keyhole_.c2(0);
+                acados_p[4] = prev_suc_keyhole_.c2(1);
+                acados_p[5] = prev_suc_keyhole_.d2;
 
-                const_args_["p"](ref_num+6) = prev_suc_keyhole_.c3(0);
-                const_args_["p"](ref_num+7) = prev_suc_keyhole_.c3(1);
-                const_args_["p"](ref_num+8) = prev_suc_keyhole_.d3;
+                acados_p[6] = prev_suc_keyhole_.c3(0);
+                acados_p[7] = prev_suc_keyhole_.c3(1);
+                acados_p[8] = prev_suc_keyhole_.d3;
 
-                const_args_["p"](ref_num+9) = prev_suc_keyhole_.c4(0);
-                const_args_["p"](ref_num+10) = prev_suc_keyhole_.c4(1);
-                const_args_["p"](ref_num+11) = prev_suc_keyhole_.d4;
+                acados_p[9] = prev_suc_keyhole_.c4(0);
+                acados_p[10] = prev_suc_keyhole_.c4(1);
+                acados_p[11] = prev_suc_keyhole_.d4;
 
-                const_args_["p"](ref_num+12) = prev_suc_keyhole_.c5(0);
-                const_args_["p"](ref_num+13) = prev_suc_keyhole_.c5(1);
-                const_args_["p"](ref_num+14) = prev_suc_keyhole_.d5;
+                acados_p[12] = prev_suc_keyhole_.c5(0);
+                acados_p[13] = prev_suc_keyhole_.c5(1);
+                acados_p[14] = prev_suc_keyhole_.d5;
 
-                const_args_["p"](ref_num+15) = prev_suc_keyhole_.xc(0);   // TODO: may need to use the old keyhole origin, since it may not be a function if we use the current xc
-                const_args_["p"](ref_num+16) = prev_suc_keyhole_.xc(1);
-                const_args_["p"](ref_num+17) = prev_suc_keyhole_.r;
+                acados_p[15] = prev_suc_keyhole_.xc(0);
+                acados_p[16] = prev_suc_keyhole_.xc(1);
+                acados_p[17] = prev_suc_keyhole_.r;
 
                 for(size_t i = 0; i < 16; i++)
                 {
-                    const_args_["p"](ref_num+18+i) = prev_suc_keyhole_.a(i);
+                    acados_p[18+i] = prev_suc_keyhole_.a(i);
                 }
 
                 mpc_ready = true;
@@ -323,42 +334,48 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
     }
     else
     {
-        int ref_num = nx + N_ * (nx + nu);
         for(size_t i = 0; i < 33; i++)
         {
-            const_args_["p"](ref_num+i) = 0;
+            acados_p[i] = 0;
         }
-        const_args_["p"](ref_num+33) = 1.;
+        acados_p[33] = 1.;
 
         mpc_ready = true;
     }
 
     // ROS_INFO_STREAM("ref: " << const_args_["p"]);
 
-    DM u_opt_seq, raw_u_opt;
+    DM u_opt_seq = DM::zeros(nu, N_), raw_u_opt;
+    x_seq = DM::zeros(nx, N_+1);
     if(mpc_ready)
     {
-        DM X0_reshape = reshape(X0, nx*(N_+1), 1);
-        DM u0_reshape = reshape(u0, nu*N_, 1);
-        const_args_["x0"] = vertcat(X0_reshape, u0_reshape);
+        int status = unicycle_keyhole_mpc_acados_solve(acados_ocp_capsule);
 
-        const_args_["p"] = const_args_["p"].T();
-        const_args_["lbg"] = const_args_["lbg"].T();
-        const_args_["ubg"] = const_args_["ubg"].T();
+        for(size_t i = 0; i < N_; i++)
+        {
+            double acados_u_seq[nu_aug], acados_x_seq[nx_aug];
+            ocp_nlp_out_get(nlp_config, nlp_dims, nlp_out, i, "u", acados_u_seq);
+            ocp_nlp_out_get(nlp_config, nlp_dims, nlp_out, i, "x", acados_x_seq);
 
-        // ROS_INFO_STREAM("x0: " << const_args_["x0"]);
+            u_opt_seq(Slice(i*nu)) = acados_u_seq[0];
+            u_opt_seq(Slice(i*nu+1)) = acados_u_seq[1];
 
-        DMDict sol = opti_func_(DMDict{{"x0", const_args_["x0"]}, {"lbx", const_args_["lbx"]}, {"ubx", const_args_["ubx"]}, {"lbg", const_args_["lbg"]},{"ubg", const_args_["ubg"]}, {"p", const_args_["p"]}});
-
-        DM full_sol = sol["x"];
-        u_opt_seq = reshape(full_sol(Slice(nx*(N_+1), full_sol.size1())), nu, N_);
-        x_seq = reshape(full_sol(Slice(0, nx*(N_+1))), nx, N_+1);
+            x_seq(Slice(i*nx)) = acados_x_seq[0];
+            x_seq(Slice(i*nx+1)) = acados_x_seq[1];
+            x_seq(Slice(i*nx+2)) = acados_x_seq[2];
+        }
+        double acados_x_seq_n[nx_aug];
+        ocp_nlp_out_get(nlp_config, nlp_dims, nlp_out, N_, "x", acados_x_seq_n);
+        x_seq(Slice(N_*nx)) = acados_x_seq_n[0];
+        x_seq(Slice(N_*nx+1)) = acados_x_seq_n[1];
+        x_seq(Slice(N_*nx+2)) = acados_x_seq_n[2];
+        
         ROS_INFO_STREAM_COND(print_debug_info_, "x_seq: " << x_seq);
         ROS_INFO_STREAM_COND(print_debug_info_, "u_seq: " << u_opt_seq);
-        ROS_INFO_STREAM_COND(print_debug_info_, "Obj: " << sol["f"]);
+        // ROS_INFO_STREAM_COND(print_debug_info_, "Obj: " << sol["f"]);
         
         raw_u_opt = u_opt_seq(Slice(0, nu));
-        optimal_found = opti_func_.stats()["success"];
+        optimal_found = (status == ACADOS_SUCCESS);
     }
 
     // if((!mpc_ready && optimal_found) || (use_keyhole_ && !keyhole_found && optimal_found))
@@ -374,15 +391,10 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
     }
     else
     {
-        if(use_keyhole_ && mpc_ready)
+        if(use_keyhole_ && keyhole_found)
             ROS_WARN_STREAM("No optimal found from NMPC.");
-        else if(use_keyhole_ && !mpc_ready)
-        {
-            if(!keyhole_found && !init_keyhole_)
-                ROS_WARN_STREAM("Keyhole is not found, and no prev keyhole.");
-            else if(!keyhole_found && init_keyhole_)
-                ROS_WARN_STREAM("Keyhole is not found. Use prev keyhole. Should not come here.");
-        }
+        else if(use_keyhole_ && !keyhole_found)
+            ROS_WARN_STREAM("No optimal found for keyhole.");
         else
             ROS_WARN_STREAM("Keyhole is disabled. No optimal found from NMPC.");
 
@@ -427,7 +439,7 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
 
     // Projection Operator
     bool compare_inf_dist = true;
-    if(use_po_ && (po_always_triggered_ || !optimal_found || (compare_inf_dist && gap.getMinDist() < 1.5 * robot_geo.getRobotMaxRadius())))
+    if(use_po_ && (!optimal_found || (compare_inf_dist && gap.getMinDist() < robot_geo.getRobotMaxRadius())))
     {
         u_opt = projectionOperator(ego_min, u_opt);
         ROS_INFO_STREAM("Control after projection operator: " << u_opt);
@@ -466,7 +478,7 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
     return _ocp_successful;
 }
 
-DM PGHCController::projectionOperator(const std::pair<double, double>& ego_min, DM& u)
+DM PGHCAcadosController::projectionOperator(const std::pair<double, double>& ego_min, DM& u)
 {
     double u_add_x = 0;
     double u_add_y = 0;
@@ -550,7 +562,7 @@ DM PGHCController::projectionOperator(const std::pair<double, double>& ego_min, 
     return DM(std::vector<double>{vx, w});
 }
 
-Eigen::Vector3d PGHCController::projection_method(double min_diff_x, double min_diff_y)
+Eigen::Vector3d PGHCAcadosController::projection_method(double min_diff_x, double min_diff_y)
 {
     double r_min = r_min_;
     double r_norm = r_norm_;
@@ -568,7 +580,7 @@ Eigen::Vector3d PGHCController::projection_method(double min_diff_x, double min_
     return Eigen::Vector3d(norm_si_der_x, norm_si_der_y, si);
 }
 
-bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
+bool PGHCAcadosController::stepPCont(const potential_gap::StaticInfGap& gap, const std::pair<double, double>& ego_min, const pips_trajectory_msgs::trajectory_points& initial_plan, const PoseSE2& robot_pose, const geometry_msgs::Twist& vel, ros::Duration t_diff,
                                bool has_feedforward, Eigen::Vector2f& u_opt)
 {
     if (initial_plan.points.size() < 2)
@@ -621,9 +633,7 @@ bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std
     double v_ang = v_ang_fb + v_ang_ff;
     double v_lin = v_lin_fb + v_lin_ff;
 
-    ROS_INFO_STREAM_COND(print_debug_info_, "Raw u: [" << v_lin << ", " << v_ang 
-                << "]; Feedforward u: [" << v_lin_ff << ", " << v_ang_ff 
-                << "]; Feedback u: [" << v_lin_fb << ", " << v_ang_fb << "].");
+    ROS_INFO_STREAM_COND(print_debug_info_, "Raw u: [" << v_lin << ", " << v_ang << "].");
 
     if(use_keyhole_ && use_cbf_)
     {
@@ -677,10 +687,7 @@ bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std
     ROS_INFO_STREAM_COND(print_debug_info_, "u: [" << v_lin << ", " << v_ang << "].");
     u_opt = Eigen::Vector2f(v_lin, v_ang);
 
-    if(v_lin < 1e-4 && v_ang < 1e-4)
-        _ocp_successful = false;
-    else
-        _ocp_successful = true;
+    _ocp_successful = true;
     // publish results if desired
     // if (_publish_ocp_results) publishOptimalControlResult();  // TODO(roesmann): we could also pass time t from above
     // ROS_INFO_STREAM_COND(_print_cpu_time, "Cpu time: " << _statistics.step_time.toSec() * 1000.0 << " ms.");
@@ -689,7 +696,7 @@ bool PGHCController::stepPCont(const potential_gap::StaticInfGap& gap, const std
     return _ocp_successful;
 }
 
-pips_trajectory_msgs::trajectory_point PGHCController::interpPose(const pips_trajectory_msgs::trajectory_points& traj, double t)
+pips_trajectory_msgs::trajectory_point PGHCAcadosController::interpPose(const pips_trajectory_msgs::trajectory_points& traj, double t)
 {
     pips_trajectory_msgs::trajectory_point interp_pose;
     ros::Duration last_time = traj.points.back().time;
@@ -746,7 +753,7 @@ pips_trajectory_msgs::trajectory_point PGHCController::interpPose(const pips_tra
     return interp_pose;
 }
 
-pips_trajectory_msgs::trajectory_point PGHCController::findNearestPose(const pips_trajectory_msgs::trajectory_points& traj, const PoseSE2& robot_pose)
+pips_trajectory_msgs::trajectory_point PGHCAcadosController::findNearestPose(const pips_trajectory_msgs::trajectory_points& traj, const PoseSE2& robot_pose)
 {
     std::vector<double> pose_diff(traj.points.size());
     for (int i = 0; i < pose_diff.size(); i++) // i will always be positive, so this is fine
@@ -768,7 +775,7 @@ pips_trajectory_msgs::trajectory_point PGHCController::findNearestPose(const pip
     return traj.points[target_pose];
 }
 
-Eigen::Matrix2cd PGHCController::getComplexMatrix(double x, double y, double quat_w, double quat_z)
+Eigen::Matrix2cd PGHCAcadosController::getComplexMatrix(double x, double y, double quat_w, double quat_z)
 {
     std::complex<double> phase(quat_w, quat_z);
     phase = phase*phase;
@@ -789,7 +796,7 @@ Eigen::Matrix2cd PGHCController::getComplexMatrix(double x, double y, double qua
     return g;
 }
 
-void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFeedback::ConstPtr& msg)
+void PGHCAcadosController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFeedback::ConstPtr& msg)
 {
     // if ((int)msg->state.size() != _dynamics->getStateDimension())
     // {
@@ -803,7 +810,7 @@ void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFe
     _recent_x_feedback = Eigen::Map<const Eigen::VectorXd>(msg->state.data(), (int)msg->state.size());
 }
 
-// void PGHCController::publishOptimalControlResult()
+// void PGHCAcadosController::publishOptimalControlResult()
 // {
 //     if (!_dynamics) return;
 //     mpc_local_planner_msgs::OptimalControlResult msg;
@@ -829,19 +836,34 @@ void PGHCController::stateFeedbackCallback(const mpc_local_planner_msgs::StateFe
 //     _ocp_result_pub.publish(msg);
 // }
 
-void PGHCController::reset() 
+void PGHCAcadosController::reset() 
 { 
     PredictiveController::reset();
     mpc_fail_num_ = 0;
     keyhole_fail_num_ = 0;
+
+    // free solver
+    int status = 0;
+    status = unicycle_keyhole_mpc_acados_free(acados_ocp_capsule);
+    if (status) {
+        printf("unicycle_keyhole_mpc_acados_free() returned status %d. \n", status);
+    }
+    // free solver capsule
+    status = unicycle_keyhole_mpc_acados_free_capsule(acados_ocp_capsule);
+    if (status) {
+        printf("unicycle_keyhole_mpc_acados_free_capsule() returned status %d. \n", status);
+    }
 }
 
-void PGHCController::configureParams(const ros::NodeHandle& nh)
+void PGHCAcadosController::configureParams(const ros::NodeHandle& nh)
 {
     // Dynamics
 
     nx = 3;
     nu = 2;
+    nx_aug = 5;
+    nu_aug = 4;
+    ny = nx_aug + nu_aug;
 
     double v_min = 0, v_max = 0.5, w_min = -3, w_max = 3, v_a_max = 0.5, w_a_max = 0.5;
     nh.param("robot/v_min", v_min, v_min);
@@ -881,7 +903,7 @@ void PGHCController::configureParams(const ros::NodeHandle& nh)
     nmpc_params_.Q3 = Q3;
     nmpc_params_.R1 = R1;
     nmpc_params_.R2 = R2;
-    nmpc_params_.terminal_weight = terminal_weight; // TODO: not used
+    nmpc_params_.terminal_weight = terminal_weight;
 
     u_lin_ref_ = 0.3;
     nh.param("solver/u_lin_ref", u_lin_ref_, u_lin_ref_);
@@ -893,7 +915,7 @@ void PGHCController::configureParams(const ros::NodeHandle& nh)
     nh.param("cbf/cbf_kw", cbf_kw_, cbf_kw_);
 }
 
-void PGHCController::configureRobotDynamics(const ros::NodeHandle& nh)
+void PGHCAcadosController::configureRobotDynamics(const ros::NodeHandle& nh)
 {
     _robot_type = "unicycle";
     nh.param("robot/type", _robot_type, _robot_type);
@@ -931,181 +953,73 @@ void PGHCController::configureRobotDynamics(const ros::NodeHandle& nh)
     }
 }
 
-void PGHCController::configureNMPC(const ros::NodeHandle& nh)
+void PGHCAcadosController::configureNMPC(const ros::NodeHandle& nh)
 {
-    std::string solver_type = "ipopt";
-    nh.param("solver/type", solver_type, solver_type);
-    std::string ipopt_linear_solver = "ma27";
-    nh.param("solver/linear_solver", ipopt_linear_solver, ipopt_linear_solver);
+    acados_ocp_capsule = unicycle_keyhole_mpc_acados_create_capsule();
+    // there is an opportunity to change the number of shooting intervals in C without new code generation
+    // allocate the array and fill it accordingly
+    double* new_time_steps = new double[N_];
+    for(size_t i = 0; i < N_; i++)
+        new_time_steps[i] = time_int_;
 
-    X_ = SX::sym("X", nx, N_+1);
-    U_ = SX::sym("U", nu, N_);
-    SX P_ = SX::sym("P", nx + N_ * (nx + nu) + 3*5 + 3 + 16);
+    int status = unicycle_keyhole_mpc_acados_create_with_discretization(acados_ocp_capsule, N_, new_time_steps);
 
-    SX obj = 0;
-
-    SX g = X_(Slice(0, nx)) - P_(Slice(0, nx));
-
-    for(int k = 0; k < N_; k++)
+    delete[] new_time_steps;
+    if (status)
     {
-        SX st = X_(Slice(k*nx, (k+1)*nx));
-        SX con = U_(Slice(k*nu, (k+1)*nu));
-
-        SX st_next = X_(Slice((k+1)*nx, (k+2)*nx));
-
-        if(ni_enabled_)
-        {
-            if(k != N_ - 1)
-                obj = obj + nmpc_params_.Q1 * pow(st_next(0) - P_(5*k+3), 2) + nmpc_params_.Q2 * pow(st_next(1) - P_(5*k+4), 2) + nmpc_params_.Q3 * pow(st_next(2) - P_(5*k+5), 2);
-            else
-                obj = obj + nmpc_params_.terminal_weight * (pow(st_next(0) - P_(5*k+3), 2) + pow(st_next(1) - P_(5*k+4), 2));
-
-            obj = obj + nmpc_params_.R1 * pow(con(0) - P_(5*k+6), 2) + nmpc_params_.R2 * pow(con(1) - P_(5*k+7), 2);
-        }
-        else
-            obj = obj + nmpc_params_.Q1 * pow(st(0) - P_(5*k+3), 2) + nmpc_params_.Q2 * pow(st(1) - P_(5*k+4), 2) + nmpc_params_.Q3 * pow(st(2) - P_(5*k+5), 2);
-
-        // obj = obj + nmpc_params_.Q1 * pow(st(0) - P_(5*k+3), 2) + nmpc_params_.Q2 * pow(st(1) - P_(5*k+4), 2) + nmpc_params_.Q3 * pow(st(2) - P_(5*k+5), 2)
-        //       + nmpc_params_.R1 * pow(con(0) - P_(5*k+6), 2);
-
-        SXDict F_next_d = state_func_(SXDict{{"x", st}, {"u", con}});
-
-        SX st_next_euler = st + time_int_ * F_next_d["robot_dynamics"];
-
-        g = vertcat(g, st_next - st_next_euler);
+        printf("unicycle_keyhole_mpc_acados_create() returned status %d. Exiting.\n", status);
+        exit(1);
     }
+
+    nlp_config = unicycle_keyhole_mpc_acados_get_nlp_config(acados_ocp_capsule);
+    nlp_dims = unicycle_keyhole_mpc_acados_get_nlp_dims(acados_ocp_capsule);
+    nlp_in = unicycle_keyhole_mpc_acados_get_nlp_in(acados_ocp_capsule);
+    nlp_out = unicycle_keyhole_mpc_acados_get_nlp_out(acados_ocp_capsule);
+    nlp_solver = unicycle_keyhole_mpc_acados_get_nlp_solver(acados_ocp_capsule);
+    nlp_opts = unicycle_keyhole_mpc_acados_get_nlp_opts(acados_ocp_capsule);
+
+    for(size_t i = 0; i < N_; i++)
+    {
+        double lbu[nu_aug] = {dyn_params_.v_min, dyn_params_.w_min, dyn_params_.v_a_min, dyn_params_.w_a_min};
+        double ubu[nu_aug] = {dyn_params_.v_max, dyn_params_.w_max, dyn_params_.v_a_max, dyn_params_.w_a_max};
+
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "lbu", lbu);
+	    ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "ubx", ubu);
+    }
+
+    // --- Set Weights
+    double W[ny * ny], WN[nx_aug * nx_aug];
+    for (size_t i = 0; i < (ny * ny); i++) {
+        W[i] = 0.0;
+    }
+    for (size_t i = 0; i < (nx_aug * nx_aug); i++) {
+        WN[i] = 0.0;
+    }
+
+    W[0+0*(nu_aug+nx_aug)]   = nmpc_params_.Q1;
+    W[1+1*(nu_aug+nx_aug)]   = nmpc_params_.Q2;
+    W[2+2*(nu_aug+nx_aug)]   = nmpc_params_.Q3;
     
-    bool rbf_on = false;
-    int ref_num = nx + N_ * (nx + nu);
-    for(int k = 1; k < N_+1; k++)
+    W[5+5*(nu_aug+nx_aug)]   = nmpc_params_.R1;
+    W[6+6*(nu_aug+nx_aug)]   = nmpc_params_.R2;
+
+    WN[0+0*(nx_aug)]   = nmpc_params_.Q1 * nmpc_params_.terminal_weight;
+    WN[1+1*(nx_aug)]   = nmpc_params_.Q2 * nmpc_params_.terminal_weight;
+    WN[2+2*(nx_aug)]   = nmpc_params_.Q3 * nmpc_params_.terminal_weight;
+
+    for (size_t i = 0; i < N_; i++)
     {
-        SX st = X_(Slice(k*nx, (k+1)*nx));
-
-        SX val1 = P_(ref_num) * st(0) + P_(ref_num+1) * st(1) + P_(ref_num+2);
-        SX relu1 = if_else(val1 < 0, 0, val1);
-        SX val2 = P_(ref_num+3) * st(0) + P_(ref_num+4) * st(1) + P_(ref_num+5);
-        SX relu2 = if_else(val2 < 0, 0, val2);
-        SX val3 = P_(ref_num+6) * st(0) + P_(ref_num+7) * st(1) + P_(ref_num+8);
-        SX relu3 = if_else(val3 < 0, 0, val3);
-        SX val4 = P_(ref_num+9) * st(0) + P_(ref_num+10) * st(1) + P_(ref_num+11);
-        SX relu4 = if_else(val4 < 0, 0, val4);
-        SX val5 = P_(ref_num+12) * st(0) + P_(ref_num+13) * st(1) + P_(ref_num+14);
-        SX relu5 = if_else(val5 < 0, 0, val5);
-
-        SX circ_dist = pow(P_(ref_num+15) - st(0), 2) + pow(P_(ref_num+16) - st(1), 2);
-        SX circ;
-        if(rbf_on)
-        {
-            circ = exp(-1.0 / P_(ref_num+17) * circ_dist);
-        }
-        else
-        {
-            SX circ_val = -(circ_dist - pow(P_(ref_num+17), 2.0));
-            circ = if_else(circ_val < 0., 0., circ_val);
-        }
-
-        SX keyhole_const = P_(ref_num+18) * relu1 + P_(ref_num+19) * relu2 + P_(ref_num+20) * relu3 + P_(ref_num+21) * relu1 * relu2
-                           + P_(ref_num+22) * relu1 * relu2 * relu3 + P_(ref_num+23) * relu1 * relu4 * relu5 + P_(ref_num+24) * relu2 * relu4 * relu5
-                           + P_(ref_num+25) * circ * relu1 * relu4 + P_(ref_num+26) * circ * relu2 * relu4 
-                           + P_(ref_num+27) * circ * relu1 + P_(ref_num+28) * circ * relu2 + P_(ref_num+29) * circ * relu3
-                           + P_(ref_num+30) * circ * relu1 * relu2 + P_(ref_num+31) * circ * relu1 * relu2 * relu3
-                           + P_(ref_num+32) * circ + P_(ref_num+33);
-
-        g = vertcat(g, keyhole_const);
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "W", W);
     }
-
-    // Acc constraints
-    for(int k = 0; k < N_-1; k++)
-    {
-        SX c_con = U_(Slice(k*nu, (k+1)*nu));
-        SX n_con = U_(Slice((k+1)*nu, (k+2)*nu));
-
-        SX u_diff = (n_con - c_con) / time_int_;
-
-        g = vertcat(g, u_diff);
-    }
-
-    SX X_reshape = reshape(X_, nx*(N_+1), 1);
-    SX U_reshape = reshape(U_, nu*N_, 1);
-    SX OPT_variables = vertcat(X_reshape, U_reshape);
-
-    SXDict nlp_prob;
-    nlp_prob["f"] = obj;
-    nlp_prob["x"] = OPT_variables;
-    nlp_prob["g"] = g;
-    nlp_prob["p"] = P_;
-
-    const_args_["lbg"] = DM::zeros(nx*(N_+1)+N_+nu*(N_-1), 1); // WARNING: may have problem
-    const_args_["ubg"] = DM::zeros(nx*(N_+1)+N_+nu*(N_-1), 1);
-
-    const_args_["lbx"] = DM::zeros(nx*(N_+1)+nu*N_, 1);
-    const_args_["ubx"] = DM::zeros(nx*(N_+1)+nu*N_, 1);
-
-    for(size_t i = 0; i < N_; i++)
-    {
-        const_args_["ubg"](nx*(N_+1)+i) = dinf;
-    }
-
-    for(size_t i = 0; i < N_-1; i++)
-    {
-        const_args_["lbg"](nx*(N_+1)+N_+i*nu) = dyn_params_.v_a_min;
-        const_args_["lbg"](nx*(N_+1)+N_+i*nu+1) = dyn_params_.w_a_min;
-        const_args_["ubg"](nx*(N_+1)+N_+i*nu) = dyn_params_.v_a_max;
-        const_args_["ubg"](nx*(N_+1)+N_+i*nu+1) = dyn_params_.w_a_max;
-    }
-
-    for(size_t i = 0; i < N_+1; i++)
-    {
-        const_args_["lbx"]((i*nx)) = dyn_params_.x_min;
-        const_args_["ubx"]((i*nx)) = dyn_params_.x_max;
-        const_args_["lbx"]((i*nx+1)) = dyn_params_.y_min;
-        const_args_["ubx"]((i*nx+1)) = dyn_params_.y_max;
-        const_args_["lbx"]((i*nx+2)) = dyn_params_.theta_min;
-        const_args_["ubx"]((i*nx+2)) = dyn_params_.theta_max;
-    }
-
-    for(size_t i = 0; i < N_; i++)
-    {
-        const_args_["lbx"]((nx*(N_+1)+i*nu)) = dyn_params_.v_min;
-        const_args_["ubx"]((nx*(N_+1)+i*nu)) = dyn_params_.v_max;
-        const_args_["lbx"]((nx*(N_+1)+i*nu+1)) = dyn_params_.w_min;
-        const_args_["ubx"]((nx*(N_+1)+i*nu+1)) = dyn_params_.w_max;
-    }
-
-    const_args_["p"] = DM::zeros(nx+N_*(nx+nu)+34);
+    ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N_, "W", WN);
 
     prev_u_ = DM::zeros(N_, nu);
     prev_opt_u_ = DM::zeros(nu);
 
-    if (solver_type == "ipopt")
-    {
-        Dict opts;
-        opts["print_time"] = 0;
-        opts["verbose"] = 0;
-        opts["expand"] = 1;
-        Dict ipopt_opts;
-        ipopt_opts["max_iter"] = 2000;
-        ipopt_opts["print_level"] = 0;
-        ipopt_opts["print_timing_statistics"] = "no";
-        ipopt_opts["linear_solver"] = ipopt_linear_solver;
-        ipopt_opts["acceptable_tol"] = 1e-8;
-        ipopt_opts["acceptable_obj_change_tol"] = 1e-6;
-        ipopt_opts["max_cpu_time"] = 0.85 * time_int_;
-        opts["ipopt"] = ipopt_opts;
-
-        opti_func_ = nlpsol("solver", "ipopt", nlp_prob, opts);
-
-        ROS_INFO_STREAM("Constructed NMPC with " << solver_type << " " << ipopt_linear_solver);
-    }
-    else
-    {
-        ROS_ERROR_STREAM("Unknown solver type '" << solver_type << "' specified.");
-    }
-
     ROS_INFO_STREAM("Optimal solver created.");
 }
 
-// bool PGHCController::generateInitialStateTrajectory(const Eigen::VectorXd& x0, const Eigen::VectorXd& xf,
+// bool PGHCAcadosController::generateInitialStateTrajectory(const Eigen::VectorXd& x0, const Eigen::VectorXd& xf,
 //                                                 const std::vector<geometry_msgs::PoseStamped>& initial_plan, bool backward)
 // {
 //     if (initial_plan.size() < 2 || !_dynamics) return false;
@@ -1116,7 +1030,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     int n_ref  = _grid->getInitialN();
 //     if (n_ref < 2)
 //     {
-//         ROS_ERROR("PGHCController::generateInitialStateTrajectory(): grid not properly initialized");
+//         ROS_ERROR("PGHCAcadosController::generateInitialStateTrajectory(): grid not properly initialized");
 //         return false;
 //     }
 //     ts->add(0.0, x0);
@@ -1157,7 +1071,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     return true;
 // }
 
-// bool PGHCController::isPoseTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec,
+// bool PGHCAcadosController::isPoseTrajectoryFeasible(base_local_planner::CostmapModel* costmap_model, const std::vector<geometry_msgs::Point>& footprint_spec,
 //                                           double inscribed_radius, double circumscribed_radius, double min_resolution_collision_check_angular,
 //                                           int look_ahead_idx)
 // {
@@ -1217,7 +1131,7 @@ void PGHCController::configureNMPC(const ros::NodeHandle& nh)
 //     return true;
 // }
 
-// MX PGHCController::getState(const geometry_msgs::PoseStamped& input_pose)
+// MX PGHCAcadosController::getState(const geometry_msgs::PoseStamped& input_pose)
 // {
 //     Eigen::Quaterniond q(input_pose.pose.orientation.x, input_pose.pose.orientation.y, input_pose.pose.orientation.z, input_pose.pose.orientation.w);
 //     auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);

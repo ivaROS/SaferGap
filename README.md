@@ -8,8 +8,8 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 ## Supplementary materials
 
 - [Parameters](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/parameters.md)
-- [Ablation Study Results](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/assets/ablation_study_results.pdf)
-- [3D Visualization of ZBF](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/ZBF_3D_visual.md)
+<!-- - [Ablation Study Results](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/assets/ablation_study_results.pdf)
+- [3D Visualization of ZBF](https://github.com/ivaROS/SaferGap/blob/master/SuppMat/ZBF_3D_visual.md) -->
 
 # Dependencies and Installation
 
@@ -18,6 +18,8 @@ This paper extends the gap-based navigation technique in Potential Gap by guaran
 - CasADi: Need to [compile from source](https://github.com/casadi/casadi/wiki/InstallationLinux) for usage within ROS.
 
 - Google or-tools: [download the binary package](https://developers.google.com/optimization/install/cpp) on your system.
+
+- Acados: [compile from source](https://docs.acados.org/installation/)
 
 - Safer Gap: See the [installation instructions](https://github.com/ivaROS/SaferGap/blob/master/installation_guide.md)
 

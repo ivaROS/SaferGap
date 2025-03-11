@@ -93,8 +93,8 @@
   <exec_depend>message_runtime</exec_depend>
 
   <export>
-    <nav_core plugin="${prefix}/sg_mpc_local_planner_plugin.xml"/>
-    <mbf_costmap_core plugin="${prefix}/sg_mpc_local_planner_plugin.xml"/>
+    <nav_core plugin="${prefix}/pg_mpc_local_planner_plugin.xml"/>
+    <mbf_costmap_core plugin="${prefix}/pg_mpc_local_planner_plugin.xml"/>
   </export>
 
 </package>

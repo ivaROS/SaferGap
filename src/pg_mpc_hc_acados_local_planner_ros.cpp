@@ -20,7 +20,7 @@
  *  Authors: Christoph Rösmann
  *********************************************************************/
 
-#include <safer_gap/sg_mpc_hc_local_planner_ros.h>
+#include <safer_gap/pg_mpc_hc_acados_local_planner_ros.h>
 
 #include <mpc_local_planner/utils/math_utils.h>
 
@@ -36,12 +36,12 @@
 #include <pluginlib/class_list_macros.h>
 
 // register this planner both as a BaseLocalPlanner and as a MBF's CostmapController plugin
-PLUGINLIB_EXPORT_CLASS(sg_mpc_local_planner::SGMpcHcLocalPlannerROS, nav_core::BaseLocalPlanner);
-PLUGINLIB_EXPORT_CLASS(sg_mpc_local_planner::SGMpcHcLocalPlannerROS, mbf_costmap_core::CostmapController);
+PLUGINLIB_EXPORT_CLASS(pg_mpc_local_planner::PGMpcHcAcadosLocalPlannerROS, nav_core::BaseLocalPlanner);
+PLUGINLIB_EXPORT_CLASS(pg_mpc_local_planner::PGMpcHcAcadosLocalPlannerROS, mbf_costmap_core::CostmapController);
 
-namespace sg_mpc_local_planner {
+namespace pg_mpc_local_planner {
 
-SGMpcHcLocalPlannerROS::SGMpcHcLocalPlannerROS()
+PGMpcHcAcadosLocalPlannerROS::PGMpcHcAcadosLocalPlannerROS()
     : _costmap_ros(nullptr),
       _tf(nullptr),
       _costmap_model(nullptr),
@@ -54,17 +54,17 @@ SGMpcHcLocalPlannerROS::SGMpcHcLocalPlannerROS()
 {
 }
 
-SGMpcHcLocalPlannerROS::~SGMpcHcLocalPlannerROS() {}
+PGMpcHcAcadosLocalPlannerROS::~PGMpcHcAcadosLocalPlannerROS() {}
 
 /*
-void SGMpcHcLocalPlannerROS::reconfigureCB(TebLocalPlannerReconfigureConfig& config, uint32_t level)
+void PGMpcHcAcadosLocalPlannerROS::reconfigureCB(TebLocalPlannerReconfigureConfig& config, uint32_t level)
 {
   cfg_.reconfigure(config);
 }
 */
 
-// void SGMpcHcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
-void SGMpcHcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+// void PGMpcHcAcadosLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+void PGMpcHcAcadosLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
 {
     // check if the plugin is already initialized
     if (!_initialized)
@@ -221,10 +221,10 @@ void SGMpcHcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, c
         // validateFootprints(_robot_model->getInscribedRadius(), _robot_inscribed_radius, _controller.getInequalityConstraint()->getMinimumDistance());
 
         // setup callback for custom obstacles
-        // _custom_obst_sub = nh.subscribe("obstacles", 1, &SGMpcHcLocalPlannerROS::customObstacleCB, this);
+        // _custom_obst_sub = nh.subscribe("obstacles", 1, &PGMpcHcAcadosLocalPlannerROS::customObstacleCB, this);
 
         // setup callback for custom via-points
-        // _via_points_sub = nh.subscribe("via_points", 1, &SGMpcHcLocalPlannerROS::customViaPointsCB, this);
+        // _via_points_sub = nh.subscribe("via_points", 1, &PGMpcHcAcadosLocalPlannerROS::customViaPointsCB, this);
 
         // additional move base params
         ros::NodeHandle nh_move_base("~");
@@ -246,6 +246,7 @@ void SGMpcHcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, c
         _controller.setPrintFlags(print_flags);
 
         mpc_traj_pub_ = nh.advertise<nav_msgs::Path>("mpc_traj", 10);
+        timing_stats_pub_ = nh.advertise<safer_gap::TimingStats>("timing_stats", 1);
 
         prev_success_ = true;
 
@@ -256,23 +257,23 @@ void SGMpcHcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, c
         // set initialized flag
         _initialized = true;
 
-        ROS_DEBUG("sg_mpc_local_planner plugin initialized.");
+        ROS_DEBUG("pg_mpc_local_planner plugin initialized.");
     }
     else
     {
-        ROS_WARN("sg_mpc_local_planner has already been initialized, doing nothing.");
+        ROS_WARN("pg_mpc_local_planner has already been initialized, doing nothing.");
     }
 
     potential_gap_.updateLocalTF();
     potential_gap_.updateGlobalTF();
 }
 
-bool SGMpcHcLocalPlannerROS::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
+bool PGMpcHcAcadosLocalPlannerROS::setPlan(const std::vector<geometry_msgs::PoseStamped>& orig_global_plan)
 {
     // check if plugin is initialized
     if (!_initialized)
     {
-        ROS_ERROR("sg_mpc_local_planner has not been initialized, please call initialize() before using this planner");
+        ROS_ERROR("pg_mpc_local_planner has not been initialized, please call initialize() before using this planner");
         return false;
     }
 
@@ -296,12 +297,14 @@ bool SGMpcHcLocalPlannerROS::setPlan(const std::vector<geometry_msgs::PoseStampe
     return goal_succ;
 }
 
-bool SGMpcHcLocalPlannerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+bool PGMpcHcAcadosLocalPlannerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
 {
     ros::WallTime start = ros::WallTime::now();
     std::string dummy_message;
     geometry_msgs::PoseStamped dummy_pose;
     geometry_msgs::TwistStamped dummy_velocity, cmd_vel_stamped;
+    _controller.resetTimingStats();
+    resetTimingStats();
     uint32_t outcome = computeVelocityCommands(dummy_pose, dummy_velocity, cmd_vel_stamped, dummy_message);
     cmd_vel          = cmd_vel_stamped.twist;
     ros::WallDuration elapsed = ros::WallTime::now() - start;
@@ -315,18 +318,27 @@ bool SGMpcHcLocalPlannerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_v
     safer_gap::OptimalStats opt_stats;
     opt_stats.total_loop_num = static_cast<uint64_t>(_loop_num);
     opt_stats.mpc_fail_num = static_cast<uint64_t>(_controller.getMPCFailNum());
+    opt_stats.keyhole_fail_num = static_cast<uint64_t>(_controller.getKeyholeFailNum());
     mpc_optimal_stats_pub_.publish(opt_stats);
+
+    safer_gap::TimingStats timing_stats;
+    timing_stats.sg_time = sgap_time_;
+    timing_stats.traj_time = traj_time_;
+    _controller.getTiming(timing_stats);
+    timing_stats.total_time = (double) time_elapsed;
+    timing_stats_pub_.publish(timing_stats);
+
     return outcome == mbf_msgs::ExePathResult::SUCCESS;
 }
 
-uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::PoseStamped& pose, const geometry_msgs::TwistStamped& velocity,
+uint32_t PGMpcHcAcadosLocalPlannerROS::computeVelocityCommands(const geometry_msgs::PoseStamped& pose, const geometry_msgs::TwistStamped& velocity,
                                                      geometry_msgs::TwistStamped& cmd_vel, std::string& message)
 {
     // check if plugin initialized
     if (!_initialized)
     {
-        ROS_ERROR("sg_mpc_local_planner has not been initialized, please call initialize() before using this planner");
-        message = "sg_mpc_local_planner has not been initialized";
+        ROS_ERROR("pg_mpc_local_planner has not been initialized, please call initialize() before using this planner");
+        message = "pg_mpc_local_planner has not been initialized";
         return mbf_msgs::ExePathResult::NOT_INITIALIZED;
     }
 
@@ -392,7 +404,8 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
 
     ros::WallDuration sgap_elapsed = ros::WallTime::now() - start;
     float sgap_time_elapsed = float(sgap_elapsed.toNSec())/1000000;
-    ROS_INFO_STREAM_COND(print_timing_, "BGap time: " << sgap_time_elapsed << " ms.");
+    ROS_INFO_STREAM_COND(print_timing_, "SGap time: " << sgap_time_elapsed << " ms.");
+    sgap_time_ = (double) sgap_time_elapsed;
 
     if(enable_vis_)
     {
@@ -483,6 +496,8 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
     // set previous control value for control deviation bounds
     // if (_u_seq && !_u_seq->isEmpty()) _controller.getOptimalControlProblem()->setPreviousControlInput(_u_seq->getValuesMap(0), dt);
 
+    ros::WallTime traj_gen_start = ros::WallTime::now();
+
     bool success = false;
 
     {
@@ -529,6 +544,11 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
                     timed_plan_ = parameterizeT(transformed_plan, _robot_vel.linear.x, v_des_, a_des_);
             }
         }
+
+        ros::WallDuration traj_gen_elapsed = ros::WallTime::now() - traj_gen_start;
+        float traj_gen_time_elapsed = float(traj_gen_elapsed.toNSec())/1000000;
+        ROS_INFO_STREAM_COND(print_timing_, "Traj gen time: " << traj_gen_time_elapsed << " ms.");
+        traj_time_ = (double) traj_gen_time_elapsed;
 
         ros::Duration t_diff = cur_time - plan_start_time_;
 
@@ -618,7 +638,7 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
 
         // now we reset everything to start again with the initialization of new trajectories.
         _controller.reset();  // force reinitialization for next time
-        ROS_WARN("SGMpcHcLocalPlannerROS: trajectory is not feasible. Resetting planner...");
+        ROS_WARN("PGMpcHcAcadosLocalPlannerROS: trajectory is not feasible. Resetting planner...");
         ++_no_infeasible_plans;  // increase number of infeasible solutions in a row
         _time_last_infeasible_plan = ros::Time::now();
         _last_cmd                  = cmd_vel.twist;
@@ -632,7 +652,7 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
     if(false)
     {
         _controller.reset();
-        ROS_WARN("SGMpcHcLocalPlannerROS: velocity command invalid. Resetting controller...");
+        ROS_WARN("PGMpcHcAcadosLocalPlannerROS: velocity command invalid. Resetting controller...");
         ++_no_infeasible_plans;  // increase number of infeasible solutions in a row
         _time_last_infeasible_plan = ros::Time::now();
         _last_cmd                  = cmd_vel.twist;
@@ -661,7 +681,7 @@ uint32_t SGMpcHcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::Po
     return mbf_msgs::ExePathResult::SUCCESS;
 }
 
-bool SGMpcHcLocalPlannerROS::isGoalReached()
+bool PGMpcHcAcadosLocalPlannerROS::isGoalReached()
 {
     if (_goal_reached)
     {
@@ -675,17 +695,18 @@ bool SGMpcHcLocalPlannerROS::isGoalReached()
     return false;
 }
 
-void SGMpcHcLocalPlannerROS::reset()
+void PGMpcHcAcadosLocalPlannerROS::reset()
 {
     _total_time = 0;
     _peak_time = 0;
     _loop_num = 0;
     _controller.resetMPCFailNum();
+    _controller.resetKeyholeFailNum();
     potential_gap_.reset();
     return;
 }
 
-// void SGMpcHcLocalPlannerROS::updateObstacleContainerWithCostmap()
+// void PGMpcHcAcadosLocalPlannerROS::updateObstacleContainerWithCostmap()
 // {
 //     // Add costmap obstacles if desired
 //     if (_params.include_costmap_obstacles)
@@ -712,7 +733,7 @@ void SGMpcHcLocalPlannerROS::reset()
 //     }
 // }
 
-// void SGMpcHcLocalPlannerROS::updateObstacleContainerWithCostmapConverter()
+// void PGMpcHcAcadosLocalPlannerROS::updateObstacleContainerWithCostmapConverter()
 // {
 //     if (!_costmap_converter) return;
 
@@ -754,7 +775,7 @@ void SGMpcHcLocalPlannerROS::reset()
 //     }
 // }
 
-// void SGMpcHcLocalPlannerROS::updateObstacleContainerWithCustomObstacles()
+// void PGMpcHcAcadosLocalPlannerROS::updateObstacleContainerWithCustomObstacles()
 // {
 //     // Add custom obstacles obtained via message
 //     std::lock_guard<std::mutex> l(_custom_obst_mutex);
@@ -830,7 +851,7 @@ void SGMpcHcLocalPlannerROS::reset()
 //     }
 // }
 
-// void SGMpcHcLocalPlannerROS::updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped>& transformed_plan, double min_separation)
+// void PGMpcHcAcadosLocalPlannerROS::updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped>& transformed_plan, double min_separation)
 // {
 //     _via_points.clear();
 
@@ -848,7 +869,7 @@ void SGMpcHcLocalPlannerROS::reset()
 //     }
 // }
 
-Eigen::Vector2d SGMpcHcLocalPlannerROS::tfPoseToEigenVector2dTransRot(const tf::Pose& tf_vel)
+Eigen::Vector2d PGMpcHcAcadosLocalPlannerROS::tfPoseToEigenVector2dTransRot(const tf::Pose& tf_vel)
 {
     Eigen::Vector2d vel;
     vel.coeffRef(0) = std::sqrt(tf_vel.getOrigin().getX() * tf_vel.getOrigin().getX() + tf_vel.getOrigin().getY() * tf_vel.getOrigin().getY());
@@ -856,7 +877,7 @@ Eigen::Vector2d SGMpcHcLocalPlannerROS::tfPoseToEigenVector2dTransRot(const tf::
     return vel;
 }
 
-bool SGMpcHcLocalPlannerROS::pruneGlobalPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& global_pose,
+bool PGMpcHcAcadosLocalPlannerROS::pruneGlobalPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& global_pose,
                                          std::vector<geometry_msgs::PoseStamped>& global_plan, double dist_behind_robot)
 {
     if (global_plan.empty()) return true;
@@ -898,7 +919,7 @@ bool SGMpcHcLocalPlannerROS::pruneGlobalPlan(const tf2_ros::Buffer& tf, const ge
     return true;
 }
 
-bool SGMpcHcLocalPlannerROS::pruneTransformedPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& robot_pose,
+bool PGMpcHcAcadosLocalPlannerROS::pruneTransformedPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& robot_pose,
                         std::vector<geometry_msgs::PoseStamped>& transformed_plan, double dist_behind_robot)
 {
     if (transformed_plan.empty()) return false;
@@ -934,7 +955,7 @@ bool SGMpcHcLocalPlannerROS::pruneTransformedPlan(const tf2_ros::Buffer& tf, con
     return true;
 }
 
-bool SGMpcHcLocalPlannerROS::cropTransformedPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& robot_pose,
+bool PGMpcHcAcadosLocalPlannerROS::cropTransformedPlan(const tf2_ros::Buffer& tf, const geometry_msgs::PoseStamped& robot_pose,
                         std::vector<geometry_msgs::PoseStamped>& transformed_plan, double dist_behind_robot)
 {
     if (transformed_plan.empty()) return false;
@@ -974,7 +995,7 @@ bool SGMpcHcLocalPlannerROS::cropTransformedPlan(const tf2_ros::Buffer& tf, cons
     return true;
 }
 
-std::vector<geometry_msgs::PoseStamped> SGMpcHcLocalPlannerROS::transformLocalPlan(geometry_msgs::PoseArray& orig_pose_array, std::string trans_to_frame, std_msgs::Header header)
+std::vector<geometry_msgs::PoseStamped> PGMpcHcAcadosLocalPlannerROS::transformLocalPlan(geometry_msgs::PoseArray& orig_pose_array, std::string trans_to_frame, std_msgs::Header header)
 {
     std::vector<geometry_msgs::PoseStamped> transformed_plan;
     if(orig_pose_array.poses.size() == 0)
@@ -1000,7 +1021,7 @@ std::vector<geometry_msgs::PoseStamped> SGMpcHcLocalPlannerROS::transformLocalPl
     return transformed_plan;
 }
 
-std::vector<geometry_msgs::PoseStamped> SGMpcHcLocalPlannerROS::transformLocalPlan(std::vector<geometry_msgs::PoseStamped>& orig_pose_array, std::string trans_to_frame, std_msgs::Header header)
+std::vector<geometry_msgs::PoseStamped> PGMpcHcAcadosLocalPlannerROS::transformLocalPlan(std::vector<geometry_msgs::PoseStamped>& orig_pose_array, std::string trans_to_frame, std_msgs::Header header)
 {
     std::vector<geometry_msgs::PoseStamped> transformed_plan;
     if(orig_pose_array.size() == 0)
@@ -1026,7 +1047,7 @@ std::vector<geometry_msgs::PoseStamped> SGMpcHcLocalPlannerROS::transformLocalPl
     return transformed_plan;
 }
 
-bool SGMpcHcLocalPlannerROS::transformGlobalPlan(const tf2_ros::Buffer& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan,
+bool PGMpcHcAcadosLocalPlannerROS::transformGlobalPlan(const tf2_ros::Buffer& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan,
                                              const geometry_msgs::PoseStamped& global_pose, const costmap_2d::Costmap2D& costmap,
                                              const std::string& global_frame, double max_plan_length,
                                              std::vector<geometry_msgs::PoseStamped>& transformed_plan, int* current_goal_idx,
@@ -1146,7 +1167,7 @@ bool SGMpcHcLocalPlannerROS::transformGlobalPlan(const tf2_ros::Buffer& tf, cons
     return true;
 }
 
-pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::parameterizeT(std::vector<geometry_msgs::PoseStamped>& raw_path, double start_v, double desired_vel, double desired_acc)
+pips_trajectory_msgs::trajectory_points PGMpcHcAcadosLocalPlannerROS::parameterizeT(std::vector<geometry_msgs::PoseStamped>& raw_path, double start_v, double desired_vel, double desired_acc)
 {
     pips_trajectory_msgs::trajectory_points timed_traj;
     timed_traj.header.stamp = ros::Time(0);
@@ -1220,7 +1241,7 @@ pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::parameterizeT(st
     return timed_traj;
 }
 
-pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::pathToTrajectory(const std::vector<geometry_msgs::PoseStamped>& local_path, geometry_msgs::PoseStamped robot_pose, geometry_msgs::Twist robot_vel)
+pips_trajectory_msgs::trajectory_points PGMpcHcAcadosLocalPlannerROS::pathToTrajectory(const std::vector<geometry_msgs::PoseStamped>& local_path, geometry_msgs::PoseStamped robot_pose, geometry_msgs::Twist robot_vel)
 {
     if(local_path.size() < 2)
     {
@@ -1238,7 +1259,7 @@ pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::pathToTrajectory
     return pathToTrajectory(path, robot_pose, robot_vel);
 }
 
-pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::pathToTrajectory(const nav_msgs::Path& local_path, geometry_msgs::PoseStamped robot_pose, geometry_msgs::Twist robot_vel)
+pips_trajectory_msgs::trajectory_points PGMpcHcAcadosLocalPlannerROS::pathToTrajectory(const nav_msgs::Path& local_path, geometry_msgs::PoseStamped robot_pose, geometry_msgs::Twist robot_vel)
 {
 //  double v_des = 0.3;
 //  ROS_INFO_STREAM(local_path.poses.back().pose.position.x);
@@ -1270,7 +1291,7 @@ pips_trajectory_msgs::trajectory_points SGMpcHcLocalPlannerROS::pathToTrajectory
     return trajectory_msg;
 }
 
-ros::Duration SGMpcHcLocalPlannerROS::findNearTime(const pips_trajectory_msgs::trajectory_points& traj, geometry_msgs::PoseStamped robot_pose, ros::Duration prev_tdiff)
+ros::Duration PGMpcHcAcadosLocalPlannerROS::findNearTime(const pips_trajectory_msgs::trajectory_points& traj, geometry_msgs::PoseStamped robot_pose, ros::Duration prev_tdiff)
 {
     if (traj.points.size() == 0) return ros::Duration(0);
 
@@ -1335,7 +1356,7 @@ ros::Duration SGMpcHcLocalPlannerROS::findNearTime(const pips_trajectory_msgs::t
     return min_time;
 }
 
-void SGMpcHcLocalPlannerROS::pubKeyholeLevelset(const std::shared_ptr<keyhole::Keyhole>& keyhole, std::string frame_id)
+void PGMpcHcAcadosLocalPlannerROS::pubKeyholeLevelset(const std::shared_ptr<keyhole::Keyhole>& keyhole, std::string frame_id)
 {
     if(!keyhole->initialized())
     {
@@ -1362,7 +1383,7 @@ void SGMpcHcLocalPlannerROS::pubKeyholeLevelset(const std::shared_ptr<keyhole::K
     keyhole_levelset_pub_.publish(*msg);
 }
 
-nav_msgs::Path SGMpcHcLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::Header header)
+nav_msgs::Path PGMpcHcAcadosLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::Header header)
 {
     int num = x_seq.size2();
     int x_num = x_seq.size1();
@@ -1376,14 +1397,14 @@ nav_msgs::Path SGMpcHcLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::
 
         point.pose.position.x = x_seq(i*x_num).get_elements()[0];
         point.pose.position.y = x_seq(i*x_num+1).get_elements()[0];
-        point.pose.orientation = SGHCController::euler2Quat(x_seq(i*x_num+2).get_elements()[0]);
+        point.pose.orientation = euler2Quat(x_seq(i*x_num+2).get_elements()[0]);
         raw_path.poses.push_back(point);
     }
 
     return raw_path;
 }
 
-// double SGMpcHcLocalPlannerROS::estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped>& global_plan,
+// double PGMpcHcAcadosLocalPlannerROS::estimateLocalGoalOrientation(const std::vector<geometry_msgs::PoseStamped>& global_plan,
 //                                                         const geometry_msgs::PoseStamped& local_goal, int current_goal_idx,
 //                                                         const geometry_msgs::TransformStamped& tf_plan_to_global, int moving_average_length) const
 // {
@@ -1430,7 +1451,7 @@ nav_msgs::Path SGMpcHcLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::
 //     return teb_local_planner::average_angles(candidates);
 // }
 
-// void SGMpcHcLocalPlannerROS::validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist)
+// void PGMpcHcAcadosLocalPlannerROS::validateFootprints(double opt_inscribed_radius, double costmap_inscribed_radius, double min_obst_dist)
 // {
 //     ROS_WARN_COND(opt_inscribed_radius + min_obst_dist < costmap_inscribed_radius,
 //                   "The inscribed radius of the footprint specified for TEB optimization (%f) + min_obstacle_dist (%f) are smaller "
@@ -1439,13 +1460,13 @@ nav_msgs::Path SGMpcHcLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::
 //                   opt_inscribed_radius, min_obst_dist, costmap_inscribed_radius);
 // }
 
-// void SGMpcHcLocalPlannerROS::customObstacleCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg)
+// void PGMpcHcAcadosLocalPlannerROS::customObstacleCB(const costmap_converter::ObstacleArrayMsg::ConstPtr& obst_msg)
 // {
 //     std::lock_guard<std::mutex> l(_custom_obst_mutex);
 //     _custom_obstacle_msg = *obst_msg;
 // }
 
-// void SGMpcHcLocalPlannerROS::customViaPointsCB(const nav_msgs::Path::ConstPtr& via_points_msg)
+// void PGMpcHcAcadosLocalPlannerROS::customViaPointsCB(const nav_msgs::Path::ConstPtr& via_points_msg)
 // {
 //     ROS_INFO_ONCE("Via-points received. This message is printed once.");
 //     if (_params.global_plan_viapoint_sep > 0)
@@ -1466,7 +1487,7 @@ nav_msgs::Path SGMpcHcLocalPlannerROS::xSeqToPathMsg(const DM& x_seq, std_msgs::
 //     _custom_via_points_active = !_via_points.empty();
 // }
 
-teb_local_planner::RobotFootprintModelPtr SGMpcHcLocalPlannerROS::getRobotFootprintFromParamServer(const ros::NodeHandle& nh,
+teb_local_planner::RobotFootprintModelPtr PGMpcHcAcadosLocalPlannerROS::getRobotFootprintFromParamServer(const ros::NodeHandle& nh,
                                                                                                costmap_2d::Costmap2DROS* costmap_ros)
 {
     std::string model_name;
@@ -1606,7 +1627,7 @@ teb_local_planner::RobotFootprintModelPtr SGMpcHcLocalPlannerROS::getRobotFootpr
     return boost::make_shared<teb_local_planner::PointRobotFootprint>();
 }
 
-teb_local_planner::RobotFootprintModelPtr SGMpcHcLocalPlannerROS::getRobotFootprintFromCostmap2d(costmap_2d::Costmap2DROS& costmap_ros)
+teb_local_planner::RobotFootprintModelPtr PGMpcHcAcadosLocalPlannerROS::getRobotFootprintFromCostmap2d(costmap_2d::Costmap2DROS& costmap_ros)
 {
     Point2dContainer footprint;
     Eigen::Vector2d pt;
@@ -1622,7 +1643,7 @@ teb_local_planner::RobotFootprintModelPtr SGMpcHcLocalPlannerROS::getRobotFootpr
     return boost::make_shared<teb_local_planner::PolygonRobotFootprint>(footprint);
 }
 
-teb_local_planner::Point2dContainer SGMpcHcLocalPlannerROS::makeFootprintFromXMLRPC(XmlRpc::XmlRpcValue& footprint_xmlrpc,
+teb_local_planner::Point2dContainer PGMpcHcAcadosLocalPlannerROS::makeFootprintFromXMLRPC(XmlRpc::XmlRpcValue& footprint_xmlrpc,
                                                                                 const std::string& full_param_name)
 {
     // Make sure we have an array of at least 3 elements.
@@ -1661,7 +1682,7 @@ teb_local_planner::Point2dContainer SGMpcHcLocalPlannerROS::makeFootprintFromXML
     return footprint;
 }
 
-double SGMpcHcLocalPlannerROS::getNumberFromXMLRPC(XmlRpc::XmlRpcValue& value, const std::string& full_param_name)
+double PGMpcHcAcadosLocalPlannerROS::getNumberFromXMLRPC(XmlRpc::XmlRpcValue& value, const std::string& full_param_name)
 {
     // Make sure that the value we're looking at is either a double or an int.
     if (value.getType() != XmlRpc::XmlRpcValue::TypeInt && value.getType() != XmlRpc::XmlRpcValue::TypeDouble)

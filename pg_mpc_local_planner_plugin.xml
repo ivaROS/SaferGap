@@ -1,0 +1,28 @@
+<library path="lib/libpg_mpc_local_planner">
+	<class name="pg_mpc_local_planner/PGMpcLocalPlannerROS" type="pg_mpc_local_planner::PGMpcLocalPlannerROS" base_class_type="nav_core::BaseLocalPlanner">
+		<description>
+			The pg_mpc_local_planner package implements a plugin
+			to the base_local_planner of the 2D navigation stack.
+		</description>
+	</class>
+	<class name="pg_mpc_local_planner/PGMpcLocalPlannerROS" type="pg_mpc_local_planner::PGMpcLocalPlannerROS" base_class_type="mbf_costmap_core::CostmapController">
+		<description>
+			Same plugin implemented MBF CostmapController's extended interface.
+		</description>
+	</class>
+</library>
+
+<library path="lib/libpg_mpc_hc_acados_local_planner">
+	<class name="pg_mpc_local_planner/PGMpcHcAcadosLocalPlannerROS" type="pg_mpc_local_planner::PGMpcHcAcadosLocalPlannerROS" base_class_type="nav_core::BaseLocalPlanner">
+		<description>
+			The pg_vc_mpc_local_planner package implements a plugin
+			to the base_local_planner of the 2D navigation stack.
+		</description>
+	</class>
+	<class name="pg_mpc_local_planner/PGMpcHcAcadosLocalPlannerROS" type="pg_mpc_local_planner::PGMpcHcAcadosLocalPlannerROS" base_class_type="mbf_costmap_core::CostmapController">
+		<description>
+			Same plugin implemented MBF CostmapController's extended interface.
+		</description>
+	</class>
+</library>
+

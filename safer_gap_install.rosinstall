@@ -43,6 +43,10 @@
     uri: git@github.com:ivaROS/move_base_virtual.git
     version: safer_gap
 - git:
+    local-name: move_away_recovery
+    uri: git@github.com:ivaROS/move_away_recovery.git
+    version: main
+- git:
     local-name: mpc_local_planner
     uri: git@github.com:ivaROS/mpc_local_planner.git
     version: safer_gap_ral24

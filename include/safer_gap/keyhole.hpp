@@ -270,17 +270,6 @@ class Keyhole{
             return lines;
         }
 
-        // new methods
-        void get_training_circle(const Vector2d &xc, const double  &r, const Vector2d &q1, const Vector2d &q2,
-            MatrixXd &c_safe, MatrixXd &c_unsafe, const double &inc_angle, const double &offset);
-
-        void get_training_line(const Vector2d &c, const double &d, const Vector2d &q, const Vector2d &p,
-            MatrixXd &l_safe, MatrixXd &l_unsafe, const double &dis_inc, const double &offset);
-
-        Vector2d push_back(const Vector2d &c, const double &d, const Vector2d &q, const Vector2d &p, const double &gam);
-
-        MatrixXd pt_int_;
-
     private:
         bool initialized_, same_keyhole_ = false;
 
@@ -343,19 +332,6 @@ class Keyhole{
         static autodiff::real bf_model_(autodiff::ArrayXreal &x, Keyhole *cbf);
 
         MatrixXd removeRow_(MatrixXd &mat, const int &rowNum);
-
-        // new methods
-        void get_line_ceofficients_(const Vector2d &p0, const Vector2d &p1, const Vector2d &p_check, Vector2d &c, double &d);
-
-        bool is_in_(const Vector2d &v, const Vector2d &p, const Vector2d &q);
-
-        void correct_pints_(const Vector2d &c1, const double &d1, const Vector2d &c2, const double &d2, MatrixXd &safe1, MatrixXd &safe2);
-
-        MatrixXd filterMat_(Array<bool, Dynamic, 1> &filter, MatrixXd mat);
-
-        void correct_points_dis_(const Vector2d &c, const double &d, const double &h, MatrixXd &safe);
-
-        void correct_corner_points_(MatrixXd &c_safe, MatrixXd &l1_safe, MatrixXd &l2_safe);
 };
 
 }

@@ -210,16 +210,6 @@ bool PGHCController::stepHC(const potential_gap::StaticInfGap& gap, const std::p
         ros::WallDuration keyhole_elapsed = ros::WallTime::now() - start;
         float keyhole_time_elapsed = float(keyhole_elapsed.toNSec())/1000000;
         ROS_INFO_STREAM_COND(print_timing_, "Keyhole time: " << keyhole_time_elapsed << " ms. Found keyhole: " << keyhole_found);
-        if(!keyhole_found){
-            // ROS_INFO_STREAM_COND(print_timing_, 
-            // "xc=[" << xc[0] << "," << xc[1] << "]\n" <<
-            // "q1=[" << l_int[0] << "," << l_int[1] << "]\n" <<
-            // "q2=[" << r_int[0] << "," << r_int[1] << "]\n" <<
-            // "p1=[" << lgap[0] << "," << lgap[1] << "]\n" <<
-            // "p2=[" << rgap[0] << "," << rgap[1] << "]\n" <<
-            // "r=" << r);
-            std::cout << *keyhole_ << std::endl;
-        }
         keyhole_time_ = (double) keyhole_time_elapsed;
 
         mpc_start = ros::WallTime::now();
